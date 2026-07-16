@@ -1,34 +1,103 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   Camera, ChefHat, MapPin, Plus, Minus, X, Check, Clock, Flame,
-  UtensilsCrossed, Sparkles, ScanLine, Trash2, ChevronRight, ChevronLeft,
+  UtensilsCrossed, Sparkles, ScanLine, ChevronRight, ChevronLeft,
   Timer as TimerIcon, PackageOpen, Percent, Star, ChevronDown, CookingPot,
-  Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw
+  Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw, Trash2,
+  Settings, Search, MessageCircle, Send, Lightbulb, AlertTriangle
 } from 'lucide-react';
+
+/* ------------------------------------------------------------------ */
+/* GEMINI SETUP                                                        */
+/* ------------------------------------------------------------------ */
+/* NOTE: this key still ships inside the client bundle at build time (any
+   Vite env var prefixed VITE_ gets inlined into the JS that browsers
+   download), so it will be visible in devtools/network tab once deployed.
+   Restrict the key in Google AI Studio (HTTP referrer + quota) regardless
+   of where it's stored. Set VITE_GEMINI_API_KEY in Vercel → Project →
+   Settings → Environment Variables. */
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
+function requireGemini() {
+  if (!genAI) throw new Error('Gemini API key not configured (VITE_GEMINI_API_KEY missing).');
+  return genAI;
+}
+const visionModel = () => requireGemini().getGenerativeModel({ model: 'gemini-1.5-flash' });
+const textModel = () => requireGemini().getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function parseQtyString(qtyStr) {
+  if (typeof qtyStr === 'number') return { qty: qtyStr, unit: 'pcs' };
+  const match = String(qtyStr).trim().match(/^([\d.]+)\s*([a-zA-Z%]*)$/);
+  if (match) {
+    return { qty: parseFloat(match[1]) || 1, unit: match[2] || 'pcs' };
+  }
+  return { qty: 1, unit: String(qtyStr) || 'pcs' };
+}
+
+async function scanImageWithGemini(base64Data, mimeType) {
+  const prompt =
+    'Analyze this photo of kitchen or pantry ingredients. Return ONLY a strict JSON array, no markdown fences, no prose, in this exact shape: [{"name":"Ayam","qty":"500g"}]. Use ingredient names as commonly used in Malaysia (Malay or English). Estimate quantity reasonably if unsure.';
+  const result = await visionModel().generateContent([
+    { inlineData: { data: base64Data, mimeType } },
+    prompt,
+  ]);
+  const raw = result.response.text().replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(raw);
+  return parsed.map((item, idx) => {
+    const { qty, unit } = parseQtyString(item.qty);
+    return { id: `scan-${Date.now()}-${idx}`, name: item.name, qty, unit };
+  });
+}
+
+async function getChefInsight(pantryNames) {
+  const prompt = `Bagi pantri berikut: ${pantryNames.join(', ')}. Tulis SATU ayat witty dan localized (Bahasa Malaysia santai) mengulas kombinasi bahan ini untuk pengguna app memasak. Tiada markdown, tiada tanda petik, terus ayat sahaja, maksimum 22 patah perkataan.`;
+  const result = await textModel().generateContent(prompt);
+  return result.response.text().trim();
+}
+
+async function getSubstitution(ingredientName) {
+  const prompt = `Cadangkan SATU pengganti ringkas untuk bahan masakan Malaysia "${ingredientName}" jika ia tiada dalam pantri. Jawab dalam SATU ayat pendek Bahasa Malaysia santai, tiada markdown, tiada tanda petik.`;
+  const result = await textModel().generateContent(prompt);
+  return result.response.text().trim();
+}
+
+async function getBoredomBusterLine(activeCount, cooldownCount) {
+  const prompt = `Pengguna ada ${activeCount} pilihan makan baru sekarang dan telah melawat ${cooldownCount} tempat dalam 14 hari lepas. Tulis SATU headline pendek (Bahasa Malaysia, santai, menarik) untuk galakkan mereka cuba sesuatu yang baru hari ini. Tiada markdown, tiada tanda petik, maksimum 16 patah perkataan.`;
+  const result = await textModel().generateContent(prompt);
+  return result.response.text().trim();
+}
+
+async function askChefBot(history, question) {
+  const chat = textModel().startChat({
+    history: history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
+  });
+  const prompt = `Anda ialah pembantu memasak & makan mesra bernama Chef JomMakan. Jawab ringkas, mesra, dalam Bahasa Malaysia santai (boleh campur sikit English). Soalan pengguna: ${question}`;
+  const result = await chat.sendMessage(prompt);
+  return result.response.text().trim();
+}
 
 /* ------------------------------------------------------------------ */
 /* CONSTANTS & SEED DATA                                              */
 /* ------------------------------------------------------------------ */
 
 const STORAGE_KEY = 'jommakan_state_v1';
+const SETTINGS_KEY = 'jommakan_settings_v1';
 const FATIGUE_DAYS = 4;
 const DINING_COOLDOWN_DAYS = 14;
 
 const RECIPE_ICONS = { rendang: Beef, ayam: Drumstick, ikan: Fish, nasi: Soup, western: Salad };
-
-const SEED_PANTRY = [
-  { id: 'p1', name: 'Ayam (Chicken)', qty: 1000, unit: 'g' },
-  { id: 'p2', name: 'Bawang Merah (Shallots)', qty: 8, unit: 'pcs' },
-  { id: 'p3', name: 'Santan (Coconut Milk)', qty: 400, unit: 'ml' },
-  { id: 'p4', name: 'Daging (Beef)', qty: 600, unit: 'g' },
-  { id: 'p5', name: 'Beras (Rice)', qty: 2000, unit: 'g' },
-  { id: 'p6', name: 'Cili Kering (Dried Chilies)', qty: 20, unit: 'pcs' },
-  { id: 'p7', name: 'Ikan Kembung (Mackerel)', qty: 500, unit: 'g' },
-  { id: 'p8', name: 'Bawang Putih (Garlic)', qty: 10, unit: 'pcs' },
-  { id: 'p9', name: 'Serai (Lemongrass)', qty: 6, unit: 'pcs' },
-  { id: 'p10', name: 'Asam Jawa (Tamarind)', qty: 100, unit: 'g' },
-];
 
 const RECIPES = [
   {
@@ -207,6 +276,24 @@ function saveState(state) {
   }
 }
 
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveSettings(settings) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
 function daysAgo(dateStr) {
   const then = new Date(dateStr).getTime();
   const now = Date.now();
@@ -214,7 +301,7 @@ function daysAgo(dateStr) {
 }
 
 function normalize(str) {
-  return str.toLowerCase().trim();
+  return String(str).toLowerCase().trim();
 }
 
 function findPantryMatch(pantry, ingredientName) {
@@ -269,6 +356,118 @@ function Badge({ children, tone = 'kaya' }) {
   );
 }
 
+function Skeleton({ className = '' }) {
+  return (
+    <div className={`relative overflow-hidden bg-charcoal/10 rounded-lg ${className}`}>
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent"
+        animate={{ x: ['-100%', '100%'] }}
+        transition={{ duration: 1.3, repeat: Infinity, ease: 'linear' }}
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* HEADER: SETTINGS + CLEAR-ALL                                        */
+/* ------------------------------------------------------------------ */
+
+function BinConfirmModal({ open, onCancel, onConfirm }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] bg-charcoal/60 flex items-center justify-center px-6"
+          onClick={onCancel}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 16 }}
+            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+            onClick={(e) => e.stopPropagation()}
+            className="glass w-full max-w-xs rounded-3xl p-6 shadow-glass text-center"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-sambal/15 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={22} className="text-sambal" />
+            </div>
+            <p className="font-display font-bold text-lg text-charcoal">Kosongkan Semua Data?</p>
+            <p className="text-xs text-charcoal/60 mt-2 leading-relaxed">
+              Ini akan padam Baki Pantri, Sejarah Masakan dan Sejarah Makan secara kekal.
+            </p>
+            <div className="flex gap-3 mt-5">
+              <TapButton
+                onClick={onCancel}
+                className="flex-1 py-3 rounded-2xl bg-charcoal/10 text-charcoal font-display font-bold text-sm"
+              >
+                Batal
+              </TapButton>
+              <TapButton
+                onClick={onConfirm}
+                className="flex-1 py-3 rounded-2xl bg-sambal text-white font-display font-bold text-sm"
+              >
+                Kosongkan
+              </TapButton>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function SettingsPanel({ open, onClose, chatEnabled, setChatEnabled }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] bg-charcoal/60 flex items-start justify-end"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs h-full bg-coconut p-6 safe-top safe-bottom shadow-glass"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <p className="font-display font-bold text-xl text-charcoal">Tetapan</p>
+              <TapButton onClick={onClose} className="w-9 h-9 rounded-full bg-charcoal/10 flex items-center justify-center">
+                <X size={16} className="text-charcoal" />
+              </TapButton>
+            </div>
+
+            <div className="glass rounded-3xl p-4 flex items-center justify-between shadow-glass">
+              <div className="pr-3">
+                <p className="text-sm font-display font-bold text-charcoal">Enable Backup AI Chatbot Assistant</p>
+                <p className="text-[11px] text-charcoal/50 mt-1">
+                  Papar bebuih chat AI terapung di penjuru bawah kanan.
+                </p>
+              </div>
+              <TapButton
+                onClick={() => setChatEnabled((v) => !v)}
+                className={`w-12 h-7 rounded-full shrink-0 flex items-center px-1 transition-colors ${
+                  chatEnabled ? 'bg-pandan justify-end' : 'bg-charcoal/20 justify-start'
+                }`}
+              >
+                <motion.div layout className="w-5 h-5 rounded-full bg-white shadow" />
+              </TapButton>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* BOTTOM NAVIGATION                                                    */
 /* ------------------------------------------------------------------ */
@@ -310,41 +509,37 @@ function BottomNav({ active, setActive }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* SCANNER DASHBOARD                                                    */
+/* SCANNER DASHBOARD (REAL GEMINI VISION)                               */
 /* ------------------------------------------------------------------ */
-
-const SIMULATED_SCAN_RESULTS = [
-  [
-    { name: 'Ayam (Chicken)', qty: 500, unit: 'g' },
-    { name: 'Bawang Merah (Shallots)', qty: 3, unit: 'pcs' },
-    { name: 'Santan (Coconut Milk)', qty: 200, unit: 'ml' },
-  ],
-  [
-    { name: 'Daging (Beef)', qty: 400, unit: 'g' },
-    { name: 'Bawang Putih (Garlic)', qty: 5, unit: 'pcs' },
-    { name: 'Cili Kering (Dried Chilies)', qty: 8, unit: 'pcs' },
-  ],
-  [
-    { name: 'Ikan Kembung (Mackerel)', qty: 350, unit: 'g' },
-    { name: 'Serai (Lemongrass)', qty: 2, unit: 'pcs' },
-    { name: 'Asam Jawa (Tamarind)', qty: 60, unit: 'g' },
-  ],
-];
 
 function ScannerDashboard({ onIngredientsExtracted }) {
   const [scanning, setScanning] = useState(false);
   const [extracted, setExtracted] = useState(null);
+  const [error, setError] = useState(null);
+  const inputRef = useRef(null);
 
-  const runScan = () => {
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     haptic(20);
     setScanning(true);
     setExtracted(null);
-    setTimeout(() => {
-      const pick = SIMULATED_SCAN_RESULTS[Math.floor(Math.random() * SIMULATED_SCAN_RESULTS.length)];
-      setExtracted(pick.map((i, idx) => ({ ...i, id: `scan-${Date.now()}-${idx}` })));
-      setScanning(false);
+    setError(null);
+    try {
+      const base64 = await fileToBase64(file);
+      const items = await scanImageWithGemini(base64, file.type || 'image/jpeg');
+      setExtracted(items);
       haptic(16);
-    }, 2200);
+    } catch (err) {
+      setError(
+        err?.message?.includes('VITE_GEMINI_API_KEY')
+          ? 'AI belum dikonfigurasi (VITE_GEMINI_API_KEY tiada di Vercel).'
+          : 'Imbasan gagal. Cuba lagi atau tambah bahan secara manual.'
+      );
+    } finally {
+      setScanning(false);
+      e.target.value = '';
+    }
   };
 
   const updateQty = (id, delta) => {
@@ -365,8 +560,16 @@ function ScannerDashboard({ onIngredientsExtracted }) {
 
   return (
     <div className="mb-6">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFile}
+      />
       <TapButton
-        onClick={runScan}
+        onClick={() => inputRef.current?.click()}
         disabled={scanning}
         className="relative w-full h-44 rounded-3xl overflow-hidden bg-charcoal shadow-glass"
       >
@@ -395,14 +598,18 @@ function ScannerDashboard({ onIngredientsExtracted }) {
           </motion.div>
           <div className="text-center">
             <p className="font-display font-bold text-sm">
-              {scanning ? 'Mengimbas bahan-bahan...' : 'Imbas Bahan Dapur Anda'}
+              {scanning ? 'AI sedang mengimbas bahan...' : 'Imbas Bahan Dapur Anda'}
             </p>
             <p className="text-[11px] text-white/60 mt-0.5">
-              {scanning ? 'AI sedang mengenal pasti kuantiti' : 'Ketik untuk simulasi imbasan AI'}
+              {scanning ? 'Mengenal pasti kuantiti dengan Gemini' : 'Ketik untuk snap atau muat naik foto'}
             </p>
           </div>
         </div>
       </TapButton>
+
+      {error && (
+        <p className="text-xs text-sambal font-semibold mt-3 px-1">{error}</p>
+      )}
 
       <AnimatePresence>
         {extracted && (
@@ -417,36 +624,45 @@ function ScannerDashboard({ onIngredientsExtracted }) {
               <p className="font-display font-bold text-sm text-charcoal">Bahan Dikesan</p>
             </div>
             <div className="space-y-2">
-              {extracted.map((item) => (
-                <div key={item.id} className="flex items-center justify-between bg-white/70 rounded-2xl px-3 py-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-charcoal truncate">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <TapButton
-                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? -1 : -50)}
-                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
-                    >
-                      <Minus size={13} className="text-charcoal" />
-                    </TapButton>
-                    <span className="text-xs font-bold w-14 text-center text-charcoal">
-                      {item.qty}{item.unit}
-                    </span>
-                    <TapButton
-                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? 1 : 50)}
-                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
-                    >
-                      <Plus size={13} className="text-charcoal" />
-                    </TapButton>
-                    <TapButton
-                      onClick={() => removeItem(item.id)}
-                      className="w-7 h-7 rounded-full bg-sambal/10 flex items-center justify-center"
-                    >
-                      <X size={13} className="text-sambal" />
-                    </TapButton>
-                  </div>
-                </div>
-              ))}
+              <AnimatePresence>
+                {extracted.map((item) => (
+                  <motion.div
+                    layout
+                    key={item.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20, transition: { duration: 0.18 } }}
+                    className="flex items-center justify-between bg-white/70 rounded-2xl px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-charcoal truncate">{item.name}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <TapButton
+                        onClick={() => updateQty(item.id, item.unit === 'pcs' ? -1 : -50)}
+                        className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
+                      >
+                        <Minus size={13} className="text-charcoal" />
+                      </TapButton>
+                      <span className="text-xs font-bold w-14 text-center text-charcoal">
+                        {item.qty}{item.unit}
+                      </span>
+                      <TapButton
+                        onClick={() => updateQty(item.id, item.unit === 'pcs' ? 1 : 50)}
+                        className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
+                      >
+                        <Plus size={13} className="text-charcoal" />
+                      </TapButton>
+                      <TapButton
+                        onClick={() => removeItem(item.id)}
+                        className="w-7 h-7 rounded-full bg-sambal/10 flex items-center justify-center"
+                      >
+                        <X size={13} className="text-sambal" />
+                      </TapButton>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
             <TapButton
               onClick={confirm}
@@ -457,6 +673,60 @@ function ScannerDashboard({ onIngredientsExtracted }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* AMBIENT CHEF INSIGHT BANNER                                          */
+/* ------------------------------------------------------------------ */
+
+function ChefInsightBanner({ pantry }) {
+  const [insight, setInsight] = useState('');
+  const [loading, setLoading] = useState(false);
+  const namesKey = useMemo(() => pantry.map((p) => normalize(p.name)).sort().join('|'), [pantry]);
+
+  useEffect(() => {
+    if (pantry.length === 0) {
+      setInsight('');
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    getChefInsight(pantry.map((p) => p.name))
+      .then((text) => {
+        if (!cancelled) setInsight(text);
+      })
+      .catch(() => {
+        if (!cancelled) setInsight('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [namesKey]);
+
+  if (pantry.length === 0) return null;
+
+  return (
+    <div className="mb-6 rounded-3xl p-4 bg-gradient-to-r from-charcoal to-charcoal/90 shadow-glass flex items-start gap-3">
+      <div className="w-8 h-8 rounded-xl bg-kaya/20 flex items-center justify-center shrink-0 mt-0.5">
+        <Lightbulb size={15} className="text-kaya" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-display font-bold text-kaya uppercase tracking-wider mb-1">Chef Insight</p>
+        {loading ? (
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        ) : (
+          <p className="text-xs text-white/90 leading-relaxed">{insight}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -482,26 +752,28 @@ function PantryBalance({ pantry, onRemove }) {
         <p className="text-xs text-charcoal/50 py-2">Pantri kosong. Imbas bahan untuk bermula.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {shown.map((item) => (
-            <motion.div
-              key={item.id}
-              layout
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="flex items-center gap-1.5 bg-white/70 rounded-full pl-3 pr-1.5 py-1.5"
-            >
-              <span className="text-xs font-semibold text-charcoal">
-                {item.name} · {item.qty}{item.unit}
-              </span>
-              <TapButton
-                onClick={() => onRemove(item.id)}
-                className="w-5 h-5 rounded-full bg-charcoal/10 flex items-center justify-center"
+          <AnimatePresence>
+            {shown.map((item) => (
+              <motion.div
+                key={item.id}
+                layout
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7, transition: { duration: 0.18 } }}
+                className="flex items-center gap-1.5 bg-white/70 rounded-full pl-3 pr-1.5 py-1.5"
               >
-                <X size={10} className="text-charcoal" />
-              </TapButton>
-            </motion.div>
-          ))}
+                <span className="text-xs font-semibold text-charcoal">
+                  {item.name} · {item.qty}{item.unit}
+                </span>
+                <TapButton
+                  onClick={() => onRemove(item.id)}
+                  className="w-5 h-5 rounded-full bg-charcoal/10 flex items-center justify-center"
+                >
+                  <X size={10} className="text-charcoal" />
+                </TapButton>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
       {pantry.length > 6 && (
@@ -513,6 +785,37 @@ function PantryBalance({ pantry, onRemove }) {
           <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </TapButton>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* EMPTY PANTRY STATE                                                   */
+/* ------------------------------------------------------------------ */
+
+function EmptyPantryState() {
+  return (
+    <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-charcoal via-charcoal to-pandan/30 p-8 text-center shadow-glass mb-2">
+      <div
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 30% 20%, rgba(233,196,106,0.35), transparent 45%), radial-gradient(circle at 75% 75%, rgba(42,157,143,0.35), transparent 45%)',
+        }}
+      />
+      <motion.div
+        className="relative z-10 w-20 h-20 mx-auto rounded-3xl bg-white/10 border border-white/15 flex items-center justify-center shadow-glow"
+        animate={{ y: [0, -6, 0], rotate: [0, -2, 2, 0] }}
+        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <CookingPot size={34} className="text-kaya" />
+      </motion.div>
+      <p className="relative z-10 font-display font-bold text-white text-base mt-5">
+        Pantri anda masih kosong
+      </p>
+      <p className="relative z-10 text-xs text-white/60 mt-2 leading-relaxed max-w-xs mx-auto">
+        Snap gambar bahan-bahan dapur anda untuk mula memasak!
+      </p>
     </div>
   );
 }
@@ -571,6 +874,48 @@ function RecipeCard({ recipe, pantry, cookedInfo, onOpen }) {
         </div>
       </div>
     </TapButton>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SMART SUBSTITUTION BADGE                                             */
+/* ------------------------------------------------------------------ */
+
+function SubstitutionBadge({ ingredientName }) {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getSubstitution(ingredientName)
+      .then((t) => {
+        if (!cancelled) setText(t);
+      })
+      .catch(() => {
+        if (!cancelled) setText('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingredientName]);
+
+  if (loading) {
+    return <Skeleton className="h-6 w-full mt-1.5" />;
+  }
+  if (!text) return null;
+
+  return (
+    <div className="mt-1.5 bg-kaya/15 rounded-xl px-3 py-2 flex items-start gap-2">
+      <span className="text-sm shrink-0">💡</span>
+      <p className="text-[11px] text-charcoal/80 leading-relaxed">
+        <span className="font-bold">AI Sub:</span> {text}
+      </p>
+    </div>
   );
 }
 
@@ -782,21 +1127,28 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
     <div className="px-5 pt-4">
       <ScannerDashboard onIngredientsExtracted={addIngredients} />
       <PantryBalance pantry={pantry} onRemove={removePantryItem} />
+      <ChefInsightBanner pantry={pantry} />
 
-      <div className="flex items-center gap-2 mb-4">
-        <Flame size={16} className="text-sambal" />
-        <p className="font-display font-bold text-sm text-charcoal">Cadangan Resepi</p>
-      </div>
+      {pantry.length === 0 ? (
+        <EmptyPantryState />
+      ) : (
+        <>
+          <div className="flex items-center gap-2 mb-4">
+            <Flame size={16} className="text-sambal" />
+            <p className="font-display font-bold text-sm text-charcoal">Cadangan Resepi</p>
+          </div>
 
-      {sortedRecipes.map((recipe) => (
-        <RecipeCard
-          key={recipe.id}
-          recipe={recipe}
-          pantry={pantry}
-          cookedInfo={cookedInfoFor(recipe.id)}
-          onOpen={setActiveRecipe}
-        />
-      ))}
+          {sortedRecipes.map((recipe) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              pantry={pantry}
+              cookedInfo={cookedInfoFor(recipe.id)}
+              onOpen={setActiveRecipe}
+            />
+          ))}
+        </>
+      )}
 
       <AnimatePresence>
         {activeRecipe && !tutorialRecipe && (
@@ -827,16 +1179,19 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
                   const match = findPantryMatch(pantry, ing.name);
                   const enough = match && match.qty >= ing.qty;
                   return (
-                    <div key={i} className="flex items-center justify-between bg-white/70 rounded-xl px-3 py-2">
-                      <span className="text-sm text-charcoal font-medium">{ing.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-charcoal/50">{ing.qty}{ing.unit}</span>
-                        {enough ? (
-                          <Check size={14} className="text-pandan" />
-                        ) : (
-                          <X size={14} className="text-sambal" />
-                        )}
+                    <div key={i} className="bg-white/70 rounded-xl px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-charcoal font-medium">{ing.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-charcoal/50">{ing.qty}{ing.unit}</span>
+                          {enough ? (
+                            <Check size={14} className="text-pandan" />
+                          ) : (
+                            <X size={14} className="text-sambal" />
+                          )}
+                        </div>
                       </div>
+                      {!enough && <SubstitutionBadge ingredientName={ing.name} />}
                     </div>
                   );
                 })}
@@ -868,6 +1223,43 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
 /* ------------------------------------------------------------------ */
 /* MODULE 2: MAKAN MANA?                                                */
 /* ------------------------------------------------------------------ */
+
+function BoredomBusterHeadline({ activeCount, cooldownCount }) {
+  const [line, setLine] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getBoredomBusterLine(activeCount, cooldownCount)
+      .then((t) => {
+        if (!cancelled) setLine(t);
+      })
+      .catch(() => {
+        if (!cancelled) setLine('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCount, cooldownCount]);
+
+  return (
+    <div className="mb-5 rounded-3xl p-4 bg-gradient-to-r from-sambal to-kaya shadow-glass">
+      {loading ? (
+        <div className="space-y-1.5">
+          <Skeleton className="h-3.5 w-3/4 bg-white/30" />
+          <Skeleton className="h-3.5 w-1/2 bg-white/30" />
+        </div>
+      ) : (
+        <p className="font-display font-bold text-white text-sm leading-snug">{line}</p>
+      )}
+    </div>
+  );
+}
 
 function RestaurantCard({ restaurant, onMarkEaten, cooldownDays }) {
   return (
@@ -905,6 +1297,7 @@ function RestaurantCard({ restaurant, onMarkEaten, cooldownDays }) {
 
 function MakanMana({ diningHistory, setDiningHistory }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -921,18 +1314,49 @@ function MakanMana({ diningHistory, setDiningHistory }) {
     return d < DINING_COOLDOWN_DAYS ? d : null;
   };
 
-  const active = RESTAURANTS.filter((r) => cooldownDaysFor(r.id) == null);
-  const onCooldown = RESTAURANTS.filter((r) => cooldownDaysFor(r.id) != null);
+  const filtered = useMemo(() => {
+    const q = normalize(query);
+    if (!q) return RESTAURANTS;
+    return RESTAURANTS.filter(
+      (r) =>
+        normalize(r.name).includes(q) ||
+        normalize(r.cuisine).includes(q) ||
+        normalize(r.promo).includes(q)
+    );
+  }, [query]);
+
+  const active = filtered.filter((r) => cooldownDaysFor(r.id) == null);
+  const onCooldown = filtered.filter((r) => cooldownDaysFor(r.id) != null);
 
   return (
     <div className="px-5 pt-4 pb-4">
+      <BoredomBusterHeadline activeCount={active.length} cooldownCount={onCooldown.length} />
+
+      <div className="relative mb-5">
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-charcoal/40" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari nama, jenis makanan atau promosi..."
+          className="w-full glass rounded-2xl pl-11 pr-4 py-3 text-sm text-charcoal placeholder:text-charcoal/40 outline-none focus:ring-2 focus:ring-sambal/40"
+        />
+        {query && (
+          <TapButton
+            onClick={() => setQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-charcoal/10 flex items-center justify-center"
+          >
+            <X size={12} className="text-charcoal" />
+          </TapButton>
+        )}
+      </div>
+
       <div className="flex items-center gap-2 mb-4">
         <Sparkles size={16} className="text-sambal" />
         <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
       </div>
 
       {active.length === 0 && (
-        <p className="text-xs text-charcoal/50 mb-4">Semua pilihan dalam cooldown. Semak drawer di bawah.</p>
+        <p className="text-xs text-charcoal/50 mb-4">Tiada hasil carian dalam senarai aktif.</p>
       )}
 
       {active.map((r) => (
@@ -975,22 +1399,132 @@ function MakanMana({ diningHistory, setDiningHistory }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* BACKUP AI CHATBOT (OPT-IN, FLOATING)                                 */
+/* ------------------------------------------------------------------ */
+
+function ChatBubble() {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const send = async () => {
+    const question = input.trim();
+    if (!question || loading) return;
+    setInput('');
+    const nextMessages = [...messages, { role: 'user', text: question }];
+    setMessages(nextMessages);
+    setLoading(true);
+    try {
+      const reply = await askChefBot(messages, question);
+      setMessages((prev) => [...prev, { role: 'model', text: reply }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'model', text: 'Maaf, ada masalah sambungan. Cuba lagi sekejap.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed bottom-28 right-5 z-40">
+        <TapButton
+          onClick={() => setOpen((o) => !o)}
+          className="w-14 h-14 rounded-full bg-gradient-to-br from-sambal to-kaya shadow-glow flex items-center justify-center"
+        >
+          {open ? <X size={22} className="text-white" /> : <MessageCircle size={22} className="text-white" />}
+        </TapButton>
+      </div>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="fixed bottom-44 right-5 z-40 w-[85vw] max-w-sm h-[60vh] glass rounded-3xl shadow-glass flex flex-col overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-charcoal/90 flex items-center gap-2 shrink-0">
+              <ChefHat size={16} className="text-kaya" />
+              <p className="text-white font-display font-bold text-sm">Chef JomMakan</p>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+              {messages.length === 0 && (
+                <p className="text-xs text-charcoal/50 text-center mt-6">
+                  Tanya apa-apa pasal masakan atau tempat makan!
+                </p>
+              )}
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                    m.role === 'user'
+                      ? 'ml-auto bg-sambal text-white rounded-br-md'
+                      : 'mr-auto bg-white/80 text-charcoal rounded-bl-md'
+                  }`}
+                >
+                  {m.text}
+                </div>
+              ))}
+              {loading && (
+                <div className="mr-auto max-w-[60%]">
+                  <Skeleton className="h-8 w-full rounded-2xl" />
+                </div>
+              )}
+            </div>
+            <div className="p-3 flex items-center gap-2 bg-white/50 shrink-0">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && send()}
+                placeholder="Taip soalan anda..."
+                className="flex-1 bg-white rounded-full px-4 py-2.5 text-xs text-charcoal outline-none"
+              />
+              <TapButton
+                onClick={send}
+                disabled={loading || !input.trim()}
+                className="w-9 h-9 rounded-full bg-sambal flex items-center justify-center shrink-0"
+              >
+                <Send size={14} className="text-white" />
+              </TapButton>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* ROOT APP                                                             */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
   const [active, setActive] = useState('apa');
-  const [pantry, setPantry] = useState(SEED_PANTRY);
+  const [pantry, setPantry] = useState([]);
   const [cookedHistory, setCookedHistory] = useState([]);
   const [diningHistory, setDiningHistory] = useState([]);
+  const [binConfirmOpen, setBinConfirmOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
     const saved = loadState();
     if (saved) {
-      setPantry(saved.pantry ?? SEED_PANTRY);
+      setPantry(saved.pantry ?? []);
       setCookedHistory(saved.cookedHistory ?? []);
       setDiningHistory(saved.diningHistory ?? []);
+    }
+    const settings = loadSettings();
+    if (settings) {
+      setChatEnabled(Boolean(settings.chatEnabled));
     }
     hydrated.current = true;
   }, []);
@@ -1000,6 +1534,19 @@ export default function App() {
     saveState({ pantry, cookedHistory, diningHistory });
   }, [pantry, cookedHistory, diningHistory]);
 
+  useEffect(() => {
+    if (!hydrated.current) return;
+    saveSettings({ chatEnabled });
+  }, [chatEnabled]);
+
+  const clearAllData = () => {
+    setPantry([]);
+    setCookedHistory([]);
+    setDiningHistory([]);
+    setBinConfirmOpen(false);
+    haptic(30);
+  };
+
   return (
     <div className="min-h-screen bg-coconut safe-top">
       <header className="px-5 pt-6 pb-2 flex items-center justify-between">
@@ -1007,11 +1554,25 @@ export default function App() {
           <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
           <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
         </div>
-        <motion.div
-          className="w-11 h-11 rounded-2xl bg-gradient-to-br from-sambal to-kaya flex items-center justify-center shadow-glow animate-floatSlow"
-        >
-          <CookingPot size={20} className="text-white" />
-        </motion.div>
+        <div className="flex items-center gap-2">
+          <TapButton
+            onClick={() => setSettingsOpen(true)}
+            className="w-10 h-10 rounded-2xl bg-charcoal/5 flex items-center justify-center"
+          >
+            <Settings size={17} className="text-charcoal/70" />
+          </TapButton>
+          <TapButton
+            onClick={() => setBinConfirmOpen(true)}
+            className="w-10 h-10 rounded-2xl bg-charcoal/5 flex items-center justify-center"
+          >
+            <Trash2 size={17} className="text-charcoal/70" />
+          </TapButton>
+          <motion.div
+            className="w-11 h-11 rounded-2xl bg-gradient-to-br from-sambal to-kaya flex items-center justify-center shadow-glow animate-floatSlow"
+          >
+            <CookingPot size={20} className="text-white" />
+          </motion.div>
+        </div>
       </header>
 
       <main className="pb-32">
@@ -1038,6 +1599,20 @@ export default function App() {
       </main>
 
       <BottomNav active={active} setActive={setActive} />
+
+      {chatEnabled && <ChatBubble />}
+
+      <BinConfirmModal
+        open={binConfirmOpen}
+        onCancel={() => setBinConfirmOpen(false)}
+        onConfirm={clearAllData}
+      />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        chatEnabled={chatEnabled}
+        setChatEnabled={setChatEnabled}
+      />
     </div>
   );
 }
