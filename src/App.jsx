@@ -95,6 +95,12 @@ function friendlyGeminiError(err) {
   if (err?.message === 'MISSING_API_KEY') {
     return 'Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.';
   }
+  if (err?.message === 'GEMINI_TIMEOUT') {
+    return 'Gemini mengambil masa terlalu lama untuk bertindak balas. Sila cuba lagi.';
+  }
+  if (err?.message === 'GEMINI_NETWORK_ERROR') {
+    return 'Tiada sambungan ke Gemini. Semak internet anda dan cuba lagi.';
+  }
   return 'Gagal berhubung dengan Gemini. Sila cuba lagi.';
 }
 
@@ -913,6 +919,12 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
         <Sparkles size={16} className="text-sambal" />
         <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
       </div>
+
+      {searching && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-charcoal/50 font-semibold">
+          <Loader2 size={14} className="animate-spin" /> Gemini sedang mencari restoran berhampiran...
+        </div>
+      )}
 
       {searchError && (
         <div className="mb-4 flex items-center gap-2 text-xs text-sambal font-semibold">

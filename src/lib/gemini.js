@@ -38,7 +38,7 @@ function extractJson(text) {
   return JSON.parse(match[0]);
 }
 
-async function callGemini({ parts, tools, jsonMode }) {
+async function callGemini({ parts, tools, jsonMode, timeoutMs = 25000 }) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('MISSING_API_KEY');
 
@@ -46,11 +46,23 @@ async function callGemini({ parts, tools, jsonMode }) {
   if (tools) body.tools = tools;
   if (jsonMode) body.generationConfig = { responseMimeType: 'application/json' };
 
-  const res = await fetch(`${BASE_URL}/${MODEL}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}/${MODEL}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('GEMINI_TIMEOUT');
+    throw new Error('GEMINI_NETWORK_ERROR');
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
