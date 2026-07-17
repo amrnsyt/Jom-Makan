@@ -721,6 +721,20 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
 
   const removePantryItem = (id) => setPantry((prev) => prev.filter((p) => p.id !== id));
 
+  const refreshRecipes = useCallback(() => {
+    if (!pantry.length || generating) return;
+    haptic(16);
+    setGenerating(true);
+    setGenError('');
+    generateRecipes(pantry)
+      .then((newRecipes) => setRecipes(newRecipes))
+      .catch((err) => {
+        console.error('[JomMakan] generateRecipes (refresh) failed:', err);
+        setGenError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
+      })
+      .finally(() => setGenerating(false));
+  }, [pantry, generating, setRecipes]);
+
   const removeRecipe = (id) => {
     setRecipes((prev) => prev.filter((r) => r.id !== id));
     setActiveRecipe((cur) => (cur?.id === id ? null : cur));
@@ -768,10 +782,20 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
       <ScannerDashboard onIngredientsExtracted={addIngredients} />
       <PantryBalance pantry={pantry} onRemove={removePantryItem} />
 
-      <div className="flex items-center gap-2 mb-4">
-        <Flame size={16} className="text-sambal" />
-        <p className="font-display font-bold text-sm text-charcoal">Cadangan Resepi</p>
-        {generating && <Loader2 size={14} className="text-sambal animate-spin ml-1" />}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Flame size={16} className="text-sambal" />
+          <p className="font-display font-bold text-sm text-charcoal">Cadangan Resepi</p>
+          {generating && <Loader2 size={14} className="text-sambal animate-spin ml-1" />}
+        </div>
+        {pantry.length > 0 && !generating && (
+          <TapButton
+            onClick={refreshRecipes}
+            className="flex items-center gap-1 text-[11px] font-display font-bold text-charcoal/50 bg-charcoal/5 rounded-full px-3 py-1.5"
+          >
+            <RotateCcw size={11} /> Jana Semula
+          </TapButton>
+        )}
       </div>
 
       {genError && (
@@ -1146,6 +1170,30 @@ export default function App() {
     if (!hydrated.current) return;
     saveState({ pantry, recipes, restaurants, cookedHistory, diningHistory });
   }, [pantry, recipes, restaurants, cookedHistory, diningHistory]);
+
+  useEffect(() => {
+    const checkVersion = () => {
+      fetch('/version.json', { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.buildId && String(data.buildId) !== String(__BUILD_ID__)) {
+            window.location.reload();
+          }
+        })
+        .catch(() => {});
+    };
+
+    checkVersion();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkVersion();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+  }, []);
 
   const searchNearby = async () => {
     if (!getApiKey()) {
