@@ -64,7 +64,7 @@ async function callGemini({ parts, tools, jsonMode }) {
 }
 
 export async function analyzePantryImage(base64Image, mimeType = 'image/jpeg') {
-  const prompt = `You are a kitchen pantry scanner for a Malaysian cooking app. Look at this image and identify all visible food ingredients. For each ingredient, give a name (Malay name with English in brackets when applicable, e.g. "Ayam (Chicken)"), an estimated quantity, and a unit (g, ml, or pcs). Respond ONLY with a JSON array, no other text, in this exact format: [{"name": "...", "qty": number, "unit": "g|ml|pcs"}]. If no food ingredients are visible, respond with [].`;
+  const prompt = `You are a kitchen pantry scanner for a Malaysian cooking app. Look at this image and identify all visible food ingredients. For each ingredient, estimate its size/portion as best as you can from the image (e.g. a whole chicken, a bundle of vegetables, a bag of rice) and convert that into a name (Malay name with English in brackets when applicable, e.g. "Ayam (Chicken)"), an estimated quantity, and a unit (g, ml, or pcs). Approximate quantities are fine — exact precision is not required. Respond ONLY with a JSON array, no other text, in this exact format: [{"name": "...", "qty": number, "unit": "g|ml|pcs"}]. If no food ingredients are visible, respond with [].`;
 
   const text = await callGemini({
     parts: [
@@ -80,7 +80,7 @@ export async function analyzePantryImage(base64Image, mimeType = 'image/jpeg') {
 
 export async function generateRecipes(pantryItems) {
   const pantryList = (pantryItems || []).map((p) => `${p.name} (${p.qty}${p.unit})`).join(', ');
-  const prompt = `You are a Malaysian home-cooking assistant. Based on this pantry: ${pantryList || 'empty pantry'}, suggest up to 5 possible recipes mixing Malay/local dishes and Western dishes that can realistically be made using some or all of these ingredients. Respond ONLY with a JSON array, no other text, in this exact format:
+  const prompt = `You are a Malaysian home-cooking assistant. Based on this pantry: ${pantryList || 'empty pantry'}, suggest up to 5 possible recipes mixing Malay/local dishes and Western dishes that use some or all of these ingredients. The suggestions do not need to match the pantry quantities exactly — a recipe is fine even if the pantry doesn't have quite enough of an ingredient, or has more than needed. Respond ONLY with a JSON array, no other text, in this exact format:
 [{"name": "Recipe name", "kind": "ayam|rendang|ikan|nasi|western", "time": number, "difficulty": "Mudah|Sederhana|Sukar", "ingredients": [{"name": "...", "qty": number, "unit": "g|ml|pcs"}], "steps": [{"title": "...", "desc": "...", "duration": number}]}]
 "time" is total minutes. "duration" in steps is seconds of waiting/cooking time for that step (0 if none). Write all recipe names, ingredient names, step titles and descriptions in Bahasa Malaysia.`;
 
