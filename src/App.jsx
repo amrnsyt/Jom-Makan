@@ -5,9 +5,9 @@ import {
   UtensilsCrossed, Sparkles, ScanLine, Trash2, ChevronRight, ChevronLeft,
   Timer as TimerIcon, PackageOpen, Percent, Star, ChevronDown, CookingPot,
   Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw,
-  Settings, Search, Loader2, AlertCircle
+  Search, Loader2, AlertCircle
 } from 'lucide-react';
-import { getApiKey, setApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
+import { getApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
 
 /* ------------------------------------------------------------------ */
 /* CONSTANTS & SEED DATA                                              */
@@ -172,66 +172,6 @@ function BottomNav({ active, setActive }) {
         })}
       </div>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* SETTINGS MODAL (GEMINI API KEY)                                      */
-/* ------------------------------------------------------------------ */
-
-function SettingsModal({ onClose }) {
-  const [key, setKey] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setKey(getApiKey());
-  }, []);
-
-  const save = () => {
-    setApiKey(key.trim());
-    setSaved(true);
-    haptic(20);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-charcoal/60 flex items-end"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 260 }}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full bg-coconut rounded-t-[32px] p-6 safe-bottom"
-      >
-        <div className="w-10 h-1.5 bg-charcoal/20 rounded-full mx-auto mb-5" />
-        <p className="font-display font-bold text-xl text-charcoal">Tetapan Gemini API</p>
-        <p className="text-xs text-charcoal/50 mt-1">
-          Kunci API diperlukan untuk imbasan bahan dapur & carian restoran halal berhampiran.
-        </p>
-        <input
-          type="password"
-          value={key}
-          onChange={(e) => {
-            setKey(e.target.value);
-            setSaved(false);
-          }}
-          placeholder="Tampal Gemini API Key di sini"
-          className="w-full mt-4 px-4 py-3 rounded-2xl bg-white/70 text-sm text-charcoal outline-none border border-charcoal/10"
-        />
-        <TapButton
-          onClick={save}
-          className="w-full mt-4 py-3 rounded-2xl bg-gradient-to-r from-sambal to-kaya text-white font-display font-bold text-sm flex items-center justify-center gap-2"
-        >
-          <Check size={16} /> {saved ? 'Disimpan' : 'Simpan'}
-        </TapButton>
-      </motion.div>
-    </motion.div>
   );
 }
 
@@ -1038,7 +978,6 @@ export default function App() {
   const [restaurants, setRestaurants] = useState([]);
   const [cookedHistory, setCookedHistory] = useState([]);
   const [diningHistory, setDiningHistory] = useState([]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -1065,12 +1004,6 @@ export default function App() {
           <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
           <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
         </div>
-        <TapButton
-          onClick={() => setSettingsOpen(true)}
-          className="w-11 h-11 rounded-2xl bg-white/70 flex items-center justify-center shadow-glass"
-        >
-          <Settings size={18} className="text-charcoal" />
-        </TapButton>
       </header>
 
       <main className="pb-32">
@@ -1104,10 +1037,6 @@ export default function App() {
       </main>
 
       <BottomNav active={active} setActive={setActive} />
-
-      <AnimatePresence>
-        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-      </AnimatePresence>
     </div>
   );
 }
