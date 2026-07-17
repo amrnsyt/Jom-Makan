@@ -109,19 +109,39 @@ function friendlyGeminiError(err) {
 /* ------------------------------------------------------------------ */
 
 function TapButton({ children, onClick, className = '', disabled, ...rest }) {
+  const [ripples, setRipples] = useState([]);
+
+  const addRipple = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.8;
+    const x = (e.clientX ?? rect.left + rect.width / 2) - rect.left - size / 2;
+    const y = (e.clientY ?? rect.top + rect.height / 2) - rect.top - size / 2;
+    const id = Date.now() + Math.random();
+    setRipples((prev) => [...prev, { id, x, y, size }]);
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 600);
+  };
+
   return (
     <motion.button
-      whileTap={{ scale: 0.94 }}
+      whileTap={{ scale: 0.96 }}
       onClick={(e) => {
         if (disabled) return;
+        addRipple(e);
         haptic();
         onClick?.(e);
       }}
       disabled={disabled}
-      className={`select-none active:outline-none ${disabled ? 'opacity-40' : ''} ${className}`}
+      className={`relative overflow-hidden select-none active:outline-none ${disabled ? 'opacity-40' : ''} ${className}`}
       {...rest}
     >
       {children}
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          className="md-ripple absolute rounded-full bg-white/50 pointer-events-none"
+          style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
+        />
+      ))}
     </motion.button>
   );
 }
@@ -846,36 +866,75 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
 /* MODULE 2: MAKAN MANA?                                                */
 /* ------------------------------------------------------------------ */
 
-function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
+function RestaurantSkeleton() {
   return (
-    <motion.div layout className="rounded-3xl overflow-hidden shadow-glass mb-4">
-      <div className={`h-24 bg-gradient-to-br ${restaurant.gradient} relative flex items-center justify-between p-4`}>
-        <UtensilsCrossed size={64} className="absolute -right-2 -bottom-3 text-white/15" strokeWidth={1.2} />
-        <div className="relative z-10">
-          <Badge tone="kaya"><span className="flex items-center gap-1"><Percent size={11} />{restaurant.discountLabel}</span></Badge>
-        </div>
-        <div className="relative z-10 flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-black/20 rounded-full px-2 py-1">
-            <Star size={11} className="text-kaya fill-kaya" />
-            <span className="text-[11px] font-bold text-white">{restaurant.rating}</span>
-          </div>
-          <TapButton
-            onClick={() => onDelete(restaurant.id)}
-            className="w-7 h-7 rounded-full bg-black/25 flex items-center justify-center"
-          >
-            <Trash2 size={13} className="text-white" />
-          </TapButton>
-        </div>
+    <div className="rounded-[28px] bg-white shadow-md mb-4 overflow-hidden border border-charcoal/5">
+      <div className="h-20 md-shimmer" />
+      <div className="p-4 space-y-2.5">
+        <div className="h-3 w-2/3 rounded-full md-shimmer" />
+        <div className="h-3 w-1/3 rounded-full md-shimmer" />
+        <div className="h-12 rounded-2xl md-shimmer mt-1" />
       </div>
-      <div className="bg-white p-4">
-        <p className="font-display font-bold text-charcoal">{restaurant.name}</p>
-        <p className="text-xs text-charcoal/50 mt-0.5">{restaurant.cuisine} · {restaurant.distance}</p>
-        <p className="text-sm text-sambal font-semibold mt-2">{restaurant.promo}</p>
-        {restaurant.dateAvailability && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-charcoal/50">
-            <Clock size={11} /> {restaurant.dateAvailability}
+    </div>
+  );
+}
+
+function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
+  const stars = Math.round(restaurant.rating || 0);
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-[28px] bg-white shadow-md mb-4 overflow-hidden border border-charcoal/5"
+    >
+      <div className={`relative h-20 bg-gradient-to-br ${restaurant.gradient} flex items-center px-4`}>
+        <UtensilsCrossed size={72} className="absolute -right-3 -bottom-4 text-white/10" strokeWidth={1.2} />
+        <div className="relative z-10 w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+          <UtensilsCrossed size={20} className="text-white" />
+        </div>
+        <div className="relative z-10 ml-3 flex-1 min-w-0">
+          <p className="font-display font-bold text-white truncate">{restaurant.name}</p>
+          <div className="flex items-center gap-0.5 mt-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star key={i} size={10} className={i < stars ? 'text-kaya fill-kaya' : 'text-white/25'} />
+            ))}
+            <span className="text-[10px] text-white/70 ml-1 font-semibold">{restaurant.rating}</span>
           </div>
-        )}
+        </div>
+        <TapButton
+          onClick={() => onDelete(restaurant.id)}
+          className="relative z-10 w-8 h-8 rounded-full bg-black/20 flex items-center justify-center shrink-0"
+        >
+          <Trash2 size={14} className="text-white" />
+        </TapButton>
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          {restaurant.cuisine && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal/60 bg-charcoal/5 rounded-full px-2.5 py-1">
+              <Soup size={11} /> {restaurant.cuisine}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal/60 bg-charcoal/5 rounded-full px-2.5 py-1">
+            <MapPin size={11} /> {restaurant.distance}
+          </span>
+          {restaurant.dateAvailability && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-pandan bg-pandan/10 rounded-full px-2.5 py-1">
+              <Clock size={11} /> {restaurant.dateAvailability}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-start gap-2 bg-sambal/[0.08] rounded-2xl px-3 py-2.5">
+          <Percent size={14} className="text-sambal shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-display font-bold text-sambal">{restaurant.discountLabel}</p>
+            {restaurant.promo && <p className="text-xs text-charcoal/70 mt-0.5">{restaurant.promo}</p>}
+          </div>
+        </div>
+
         {cooldownDays != null ? (
           <div className="mt-3 flex items-center gap-2 text-xs text-charcoal/50">
             <Clock size={12} /> Melawat {cooldownDays} hari lalu
@@ -883,7 +942,7 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
         ) : (
           <TapButton
             onClick={() => onMarkEaten(restaurant.id)}
-            className="w-full mt-3 py-2.5 rounded-xl bg-charcoal/5 text-charcoal font-display font-bold text-xs flex items-center justify-center gap-2"
+            className="w-full mt-3 py-2.5 rounded-xl bg-charcoal text-white font-display font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
           >
             <Check size={14} /> Tandakan Makan Di Sini Hari Ini
           </TapButton>
@@ -926,8 +985,12 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
       </div>
 
       {searching && (
-        <div className="mb-4 flex items-center gap-2 text-xs text-charcoal/50 font-semibold">
-          <Loader2 size={14} className="animate-spin" /> Gemini sedang mencari restoran berhampiran...
+        <div className="mb-4">
+          <div className="flex items-center gap-2 text-xs text-charcoal/50 font-semibold mb-3">
+            <Loader2 size={14} className="animate-spin text-sambal" /> Gemini sedang mencari promosi berhampiran...
+          </div>
+          <RestaurantSkeleton />
+          <RestaurantSkeleton />
         </div>
       )}
 
@@ -1043,13 +1106,21 @@ export default function App() {
               haptic(20);
             }
           })
-          .catch((err) => setSearchError(friendlyGeminiError(err)))
+          .catch((err) => {
+            console.error('[JomMakan] findNearbyHalalRestaurants failed:', err);
+            setSearchError(friendlyGeminiError(err));
+          })
           .finally(() => setSearching(false));
       },
-      () => {
-        setSearchError('Tidak dapat mengesan lokasi anda.');
+      (err) => {
+        setSearchError(
+          err?.code === 1
+            ? 'Kebenaran lokasi ditolak. Sila benarkan akses lokasi di tetapan pelayar.'
+            : 'Tidak dapat mengesan lokasi anda. Sila pastikan GPS dihidupkan.'
+        );
         setSearching(false);
-      }
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
   };
 
@@ -1066,7 +1137,7 @@ export default function App() {
               <TapButton
                 onClick={searchNearby}
                 disabled={searching}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-xs font-display font-bold shadow-glass shrink-0"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-xs font-display font-bold shadow-lg shadow-sambal/30 shrink-0"
               >
                 {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                 Cari
