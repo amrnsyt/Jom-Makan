@@ -1147,7 +1147,7 @@ export default function App() {
     saveState({ pantry, recipes, restaurants, cookedHistory, diningHistory });
   }, [pantry, recipes, restaurants, cookedHistory, diningHistory]);
 
-  const searchNearby = () => {
+  const searchNearby = async () => {
     if (!getApiKey()) {
       setSearchError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
       return;
@@ -1155,6 +1155,20 @@ export default function App() {
     if (!navigator.geolocation) {
       setSearchError('Peranti tidak menyokong geolokasi.');
       return;
+    }
+
+    if (navigator.permissions?.query) {
+      try {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        if (status.state === 'denied') {
+          setSearchError(
+            'Akses lokasi disekat untuk laman ini. Sila buka tetapan pelayar → Kebenaran Laman → Lokasi → Benarkan, kemudian cuba lagi.'
+          );
+          return;
+        }
+      } catch {
+        /* Permissions API not fully supported — fall through and let getCurrentPosition prompt normally */
+      }
     }
 
     setSearching(true);
