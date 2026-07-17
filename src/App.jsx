@@ -4,8 +4,10 @@ import {
   Camera, ChefHat, MapPin, Plus, Minus, X, Check, Clock, Flame,
   UtensilsCrossed, Sparkles, ScanLine, Trash2, ChevronRight, ChevronLeft,
   Timer as TimerIcon, PackageOpen, Percent, Star, ChevronDown, CookingPot,
-  Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw
+  Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw,
+  Settings, Search, Loader2, AlertCircle
 } from 'lucide-react';
+import { getApiKey, setApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
 
 /* ------------------------------------------------------------------ */
 /* CONSTANTS & SEED DATA                                              */
@@ -28,161 +30,6 @@ const SEED_PANTRY = [
   { id: 'p8', name: 'Bawang Putih (Garlic)', qty: 10, unit: 'pcs' },
   { id: 'p9', name: 'Serai (Lemongrass)', qty: 6, unit: 'pcs' },
   { id: 'p10', name: 'Asam Jawa (Tamarind)', qty: 100, unit: 'g' },
-];
-
-const RECIPES = [
-  {
-    id: 'r1',
-    name: 'Ayam Masak Merah',
-    kind: 'ayam',
-    time: 45,
-    difficulty: 'Sederhana',
-    heroGradient: 'from-sambal to-kaya',
-    ingredients: [
-      { name: 'Ayam', qty: 500, unit: 'g' },
-      { name: 'Bawang Merah', qty: 5, unit: 'pcs' },
-      { name: 'Cili Kering', qty: 10, unit: 'pcs' },
-      { name: 'Santan', qty: 200, unit: 'ml' },
-    ],
-    steps: [
-      { title: 'Sediakan bahan', desc: 'Potong ayam kepada saiz sederhana. Kisar bawang merah dan cili kering menjadi pes halus.', duration: 0 },
-      { title: 'Goreng ayam', desc: 'Goreng ayam sehingga kulit keperangan. Ketepikan.', duration: 300 },
-      { title: 'Tumis pes', desc: 'Tumis pes cili dan bawang sehingga naik bau & pecah minyak.', duration: 240 },
-      { title: 'Masukkan santan', desc: 'Tuang santan, kacau perlahan dan biarkan mendidih.', duration: 180 },
-      { title: 'Simmer bersama ayam', desc: 'Masukkan ayam goreng, kacau sebati dan biarkan kuah pekat.', duration: 420 },
-    ],
-  },
-  {
-    id: 'r2',
-    name: 'Daging Rendang',
-    kind: 'rendang',
-    time: 90,
-    difficulty: 'Sukar',
-    heroGradient: 'from-charcoal to-sambal',
-    ingredients: [
-      { name: 'Daging', qty: 600, unit: 'g' },
-      { name: 'Santan', qty: 400, unit: 'ml' },
-      { name: 'Serai', qty: 3, unit: 'pcs' },
-      { name: 'Bawang Merah', qty: 6, unit: 'pcs' },
-    ],
-    steps: [
-      { title: 'Sediakan rempah', desc: 'Kisar bawang merah, bawang putih, cili kering dan halia menjadi pes.', duration: 0 },
-      { title: 'Tumis rempah', desc: 'Tumis pes bersama serai yang diketuk sehingga wangi.', duration: 300 },
-      { title: 'Masukkan daging', desc: 'Masukkan daging, kacau sehingga sebati dengan rempah.', duration: 300 },
-      { title: 'Tuang santan', desc: 'Masukkan santan, kacau rata dan biarkan mendidih perlahan.', duration: 300 },
-      { title: 'Masak perlahan', desc: 'Kecilkan api, masak sehingga kuah pekat dan berminyak, kacau kerap.', duration: 2400 },
-      { title: 'Masukkan kerisik', desc: 'Masukkan kerisik kelapa, kacau sehingga rendang kering & gelap.', duration: 600 },
-    ],
-  },
-  {
-    id: 'r3',
-    name: 'Nasi Lemak',
-    kind: 'nasi',
-    time: 40,
-    difficulty: 'Mudah',
-    heroGradient: 'from-pandan to-kaya',
-    ingredients: [
-      { name: 'Beras', qty: 400, unit: 'g' },
-      { name: 'Santan', qty: 200, unit: 'ml' },
-      { name: 'Serai', qty: 1, unit: 'pcs' },
-    ],
-    steps: [
-      { title: 'Basuh beras', desc: 'Basuh beras sehingga air jernih, toskan.', duration: 0 },
-      { title: 'Masak dengan santan', desc: 'Masak beras bersama santan, serai dan sedikit garam dalam periuk nasi.', duration: 1200 },
-      { title: 'Kukus & hidang', desc: 'Kacau nasi selepas masak, biarkan sebentar sebelum dihidang bersama sambal.', duration: 180 },
-    ],
-  },
-  {
-    id: 'r4',
-    name: 'Ikan Singgang',
-    kind: 'ikan',
-    time: 35,
-    difficulty: 'Mudah',
-    heroGradient: 'from-pandan to-charcoal',
-    ingredients: [
-      { name: 'Ikan Kembung', qty: 400, unit: 'g' },
-      { name: 'Asam Jawa', qty: 50, unit: 'g' },
-      { name: 'Serai', qty: 2, unit: 'pcs' },
-      { name: 'Bawang Merah', qty: 4, unit: 'pcs' },
-    ],
-    steps: [
-      { title: 'Sediakan kuah asam', desc: 'Rebus air bersama asam jawa, serai dan bawang merah dihiris.', duration: 300 },
-      { title: 'Masukkan ikan', desc: 'Masukkan ikan yang telah dibersihkan ke dalam kuah mendidih.', duration: 60 },
-      { title: 'Masak sehingga masak', desc: 'Biarkan mendidih perlahan sehingga ikan masak sepenuhnya.', duration: 480 },
-    ],
-  },
-  {
-    id: 'r5',
-    name: 'Creamy Garlic Chicken Pasta',
-    kind: 'western',
-    time: 30,
-    difficulty: 'Mudah',
-    heroGradient: 'from-kaya to-charcoal',
-    ingredients: [
-      { name: 'Ayam', qty: 300, unit: 'g' },
-      { name: 'Bawang Putih', qty: 4, unit: 'pcs' },
-      { name: 'Santan', qty: 150, unit: 'ml' },
-    ],
-    steps: [
-      { title: 'Rebus pasta', desc: 'Rebus pasta pilihan anda sehingga al dente. Toskan.', duration: 600 },
-      { title: 'Masak ayam', desc: 'Tumis bawang putih cincang, masukkan ayam dipotong dadu sehingga masak.', duration: 360 },
-      { title: 'Sos krim', desc: 'Tuang santan, kacau menjadi sos, biarkan pekat sedikit.', duration: 240 },
-      { title: 'Gabung & hidang', desc: 'Gaulkan pasta bersama sos, hidang panas-panas.', duration: 60 },
-    ],
-  },
-];
-
-const RESTAURANTS = [
-  {
-    id: 'd1',
-    name: 'Restoran Nasi Kandar Pelita',
-    cuisine: 'Nasi Kandar',
-    promo: 'RM5 Off Nasi Kandar',
-    discountLabel: '-RM5',
-    rating: 4.5,
-    distance: '0.8 km',
-    gradient: 'from-sambal to-charcoal',
-  },
-  {
-    id: 'd2',
-    name: 'Warung Sedap Ayam Penyet',
-    cuisine: 'Indonesian',
-    promo: '20% off total bill',
-    discountLabel: '-20%',
-    rating: 4.3,
-    distance: '1.2 km',
-    gradient: 'from-kaya to-sambal',
-  },
-  {
-    id: 'd3',
-    name: 'Kedai Kopi Aik Yin',
-    cuisine: 'Kopitiam',
-    promo: 'Buy 1 Free 1 Kopi O',
-    discountLabel: '1-FOR-1',
-    rating: 4.6,
-    distance: '0.5 km',
-    gradient: 'from-charcoal to-pandan',
-  },
-  {
-    id: 'd4',
-    name: 'Restoran Sederhana Mamak',
-    cuisine: 'Mamak',
-    promo: 'RM3 Off Roti Canai Set',
-    discountLabel: '-RM3',
-    rating: 4.2,
-    distance: '2.1 km',
-    gradient: 'from-pandan to-kaya',
-  },
-  {
-    id: 'd5',
-    name: 'Nasi Ayam Hainan Kak Long',
-    cuisine: 'Hainanese',
-    promo: '15% off for orders above RM20',
-    discountLabel: '-15%',
-    rating: 4.7,
-    distance: '1.6 km',
-    gradient: 'from-sambal to-kaya',
-  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -230,6 +77,25 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(String(result).split(',')[1] || '');
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function friendlyGeminiError(err) {
+  if (err?.message === 'MISSING_API_KEY') {
+    return 'Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.';
+  }
+  return 'Gagal berhubung dengan Gemini. Sila cuba lagi.';
 }
 
 /* ------------------------------------------------------------------ */
@@ -310,41 +176,108 @@ function BottomNav({ active, setActive }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* SCANNER DASHBOARD                                                    */
+/* SETTINGS MODAL (GEMINI API KEY)                                      */
 /* ------------------------------------------------------------------ */
 
-const SIMULATED_SCAN_RESULTS = [
-  [
-    { name: 'Ayam (Chicken)', qty: 500, unit: 'g' },
-    { name: 'Bawang Merah (Shallots)', qty: 3, unit: 'pcs' },
-    { name: 'Santan (Coconut Milk)', qty: 200, unit: 'ml' },
-  ],
-  [
-    { name: 'Daging (Beef)', qty: 400, unit: 'g' },
-    { name: 'Bawang Putih (Garlic)', qty: 5, unit: 'pcs' },
-    { name: 'Cili Kering (Dried Chilies)', qty: 8, unit: 'pcs' },
-  ],
-  [
-    { name: 'Ikan Kembung (Mackerel)', qty: 350, unit: 'g' },
-    { name: 'Serai (Lemongrass)', qty: 2, unit: 'pcs' },
-    { name: 'Asam Jawa (Tamarind)', qty: 60, unit: 'g' },
-  ],
-];
+function SettingsModal({ onClose }) {
+  const [key, setKey] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setKey(getApiKey());
+  }, []);
+
+  const save = () => {
+    setApiKey(key.trim());
+    setSaved(true);
+    haptic(20);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-charcoal/60 flex items-end"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 260 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full bg-coconut rounded-t-[32px] p-6 safe-bottom"
+      >
+        <div className="w-10 h-1.5 bg-charcoal/20 rounded-full mx-auto mb-5" />
+        <p className="font-display font-bold text-xl text-charcoal">Tetapan Gemini API</p>
+        <p className="text-xs text-charcoal/50 mt-1">
+          Kunci API diperlukan untuk imbasan bahan dapur & carian restoran halal berhampiran.
+        </p>
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => {
+            setKey(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="Tampal Gemini API Key di sini"
+          className="w-full mt-4 px-4 py-3 rounded-2xl bg-white/70 text-sm text-charcoal outline-none border border-charcoal/10"
+        />
+        <TapButton
+          onClick={save}
+          className="w-full mt-4 py-3 rounded-2xl bg-gradient-to-r from-sambal to-kaya text-white font-display font-bold text-sm flex items-center justify-center gap-2"
+        >
+          <Check size={16} /> {saved ? 'Disimpan' : 'Simpan'}
+        </TapButton>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SCANNER DASHBOARD                                                    */
+/* ------------------------------------------------------------------ */
 
 function ScannerDashboard({ onIngredientsExtracted }) {
   const [scanning, setScanning] = useState(false);
   const [extracted, setExtracted] = useState(null);
+  const [error, setError] = useState('');
+  const inputRef = useRef(null);
 
-  const runScan = () => {
+  const triggerScan = () => {
+    if (!getApiKey()) {
+      setError('Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.');
+      return;
+    }
+    setError('');
+    inputRef.current?.click();
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
     haptic(20);
     setScanning(true);
     setExtracted(null);
-    setTimeout(() => {
-      const pick = SIMULATED_SCAN_RESULTS[Math.floor(Math.random() * SIMULATED_SCAN_RESULTS.length)];
-      setExtracted(pick.map((i, idx) => ({ ...i, id: `scan-${Date.now()}-${idx}` })));
+    setError('');
+
+    try {
+      const base64 = await fileToBase64(file);
+      const items = await analyzePantryImage(base64, file.type || 'image/jpeg');
+      if (!items.length) {
+        setError('Tiada bahan dikesan dalam imej. Cuba lagi dengan imej yang lebih jelas.');
+      } else {
+        setExtracted(items.map((i, idx) => ({ ...i, id: `scan-${Date.now()}-${idx}` })));
+        haptic(16);
+      }
+    } catch (err) {
+      setError(friendlyGeminiError(err));
+    } finally {
       setScanning(false);
-      haptic(16);
-    }, 2200);
+    }
   };
 
   const updateQty = (id, delta) => {
@@ -365,8 +298,16 @@ function ScannerDashboard({ onIngredientsExtracted }) {
 
   return (
     <div className="mb-6">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFile}
+        className="hidden"
+      />
       <TapButton
-        onClick={runScan}
+        onClick={triggerScan}
         disabled={scanning}
         className="relative w-full h-44 rounded-3xl overflow-hidden bg-charcoal shadow-glass"
       >
@@ -395,14 +336,20 @@ function ScannerDashboard({ onIngredientsExtracted }) {
           </motion.div>
           <div className="text-center">
             <p className="font-display font-bold text-sm">
-              {scanning ? 'Mengimbas bahan-bahan...' : 'Imbas Bahan Dapur Anda'}
+              {scanning ? 'Gemini sedang menganalisis...' : 'Imbas Bahan Dapur Anda'}
             </p>
             <p className="text-[11px] text-white/60 mt-0.5">
-              {scanning ? 'AI sedang mengenal pasti kuantiti' : 'Ketik untuk simulasi imbasan AI'}
+              {scanning ? 'Mengenal pasti bahan & kuantiti' : 'Ketik untuk ambil gambar bahan dapur'}
             </p>
           </div>
         </div>
       </TapButton>
+
+      {error && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-sambal font-semibold px-1">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
 
       <AnimatePresence>
         {extracted && (
@@ -531,46 +478,55 @@ function scoreRecipe(recipe, pantry) {
   return have / recipe.ingredients.length;
 }
 
-function RecipeCard({ recipe, pantry, cookedInfo, onOpen }) {
+function RecipeCard({ recipe, pantry, cookedInfo, onOpen, onDelete }) {
   const match = scoreRecipe(recipe, pantry);
   const matchPct = Math.round(match * 100);
   const Icon = RECIPE_ICONS[recipe.kind] || CookingPot;
   const isFatigued = cookedInfo && cookedInfo.days < FATIGUE_DAYS;
 
   return (
-    <TapButton
-      onClick={() => onOpen(recipe)}
-      className={`w-full text-left rounded-3xl overflow-hidden shadow-glass mb-4 relative ${
-        isFatigued ? 'grayscale opacity-60' : ''
-      }`}
+    <motion.div
+      layout
+      className={`relative rounded-3xl overflow-hidden shadow-glass mb-4 ${isFatigued ? 'grayscale opacity-60' : ''}`}
     >
-      <div className={`h-28 bg-gradient-to-br ${recipe.heroGradient} relative flex items-end p-4`}>
-        <Icon size={72} className="absolute -right-2 -top-2 text-white/15" strokeWidth={1.2} />
-        <div className="relative z-10 flex items-center gap-2">
-          <Badge tone="charcoal">{recipe.difficulty}</Badge>
-          <Badge tone="kaya">
-            <span className="flex items-center gap-1"><Clock size={11} /> {recipe.time} min</span>
-          </Badge>
-        </div>
-        {isFatigued && (
-          <div className="absolute top-3 right-3">
-            <Badge tone="grey">Dimasak {cookedInfo.days}h lalu</Badge>
+      <TapButton onClick={() => onOpen(recipe)} className="w-full text-left block">
+        <div className={`h-28 bg-gradient-to-br ${recipe.heroGradient} relative flex items-end p-4`}>
+          <Icon size={72} className="absolute -right-2 -top-2 text-white/15" strokeWidth={1.2} />
+          <div className="relative z-10 flex items-center gap-2">
+            <Badge tone="charcoal">{recipe.difficulty}</Badge>
+            <Badge tone="kaya">
+              <span className="flex items-center gap-1"><Clock size={11} /> {recipe.time} min</span>
+            </Badge>
           </div>
-        )}
-      </div>
-      <div className="bg-white p-4">
-        <p className="font-display font-bold text-charcoal">{recipe.name}</p>
-        <div className="mt-2 flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-charcoal/10 overflow-hidden">
-            <div
-              className={`h-full rounded-full ${matchPct >= 80 ? 'bg-pandan' : matchPct >= 40 ? 'bg-kaya' : 'bg-sambal'}`}
-              style={{ width: `${matchPct}%` }}
-            />
-          </div>
-          <span className="text-[11px] font-bold text-charcoal/60 shrink-0">{matchPct}% padan</span>
+          {isFatigued && (
+            <div className="absolute top-3 right-3">
+              <Badge tone="grey">Dimasak {cookedInfo.days}h lalu</Badge>
+            </div>
+          )}
         </div>
-      </div>
-    </TapButton>
+        <div className="bg-white p-4">
+          <p className="font-display font-bold text-charcoal">{recipe.name}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full bg-charcoal/10 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${matchPct >= 80 ? 'bg-pandan' : matchPct >= 40 ? 'bg-kaya' : 'bg-sambal'}`}
+                style={{ width: `${matchPct}%` }}
+              />
+            </div>
+            <span className="text-[11px] font-bold text-charcoal/60 shrink-0">{matchPct}% padan</span>
+          </div>
+        </div>
+      </TapButton>
+      <TapButton
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(recipe.id);
+        }}
+        className="absolute top-3 left-3 w-8 h-8 rounded-full bg-black/25 flex items-center justify-center z-20"
+      >
+        <Trash2 size={14} className="text-white" />
+      </TapButton>
+    </motion.div>
   );
 }
 
@@ -721,11 +677,14 @@ function TutorialMode({ recipe, onClose, onFinish }) {
 /* MODULE 1: MAKAN APA?                                                 */
 /* ------------------------------------------------------------------ */
 
-function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
+function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes, setRecipes }) {
   const [activeRecipe, setActiveRecipe] = useState(null);
   const [tutorialRecipe, setTutorialRecipe] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState('');
 
   const addIngredients = useCallback((items) => {
+    let nextPantry = pantry;
     setPantry((prev) => {
       const next = [...prev];
       items.forEach((item) => {
@@ -736,11 +695,25 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
           next.push({ id: `pantry-${Date.now()}-${Math.random()}`, name: item.name, qty: item.qty, unit: item.unit });
         }
       });
+      nextPantry = next;
       return next;
     });
-  }, [setPantry]);
+
+    setGenerating(true);
+    setGenError('');
+    generateRecipes(nextPantry)
+      .then((newRecipes) => setRecipes(newRecipes))
+      .catch((err) => setGenError(friendlyGeminiError(err)))
+      .finally(() => setGenerating(false));
+  }, [pantry, setPantry, setRecipes]);
 
   const removePantryItem = (id) => setPantry((prev) => prev.filter((p) => p.id !== id));
+
+  const removeRecipe = (id) => {
+    setRecipes((prev) => prev.filter((r) => r.id !== id));
+    setActiveRecipe((cur) => (cur?.id === id ? null : cur));
+    setTutorialRecipe((cur) => (cur?.id === id ? null : cur));
+  };
 
   const cookedInfoFor = (recipeId) => {
     const entry = cookedHistory.find((h) => h.recipeId === recipeId);
@@ -749,7 +722,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
   };
 
   const sortedRecipes = useMemo(() => {
-    return [...RECIPES].sort((a, b) => {
+    return [...recipes].sort((a, b) => {
       const aInfo = cookedInfoFor(a.id);
       const bInfo = cookedInfoFor(b.id);
       const aFatigued = aInfo && aInfo.days < FATIGUE_DAYS;
@@ -758,7 +731,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
       return scoreRecipe(b, pantry) - scoreRecipe(a, pantry);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pantry, cookedHistory]);
+  }, [pantry, cookedHistory, recipes]);
 
   const finishCooking = (recipe) => {
     setPantry((prev) => {
@@ -786,7 +759,18 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
       <div className="flex items-center gap-2 mb-4">
         <Flame size={16} className="text-sambal" />
         <p className="font-display font-bold text-sm text-charcoal">Cadangan Resepi</p>
+        {generating && <Loader2 size={14} className="text-sambal animate-spin ml-1" />}
       </div>
+
+      {genError && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-sambal font-semibold">
+          <AlertCircle size={14} /> {genError}
+        </div>
+      )}
+
+      {!generating && recipes.length === 0 && !genError && (
+        <p className="text-xs text-charcoal/50 mb-4">Belum ada resepi. Imbas bahan dapur di atas untuk dapatkan cadangan.</p>
+      )}
 
       {sortedRecipes.map((recipe) => (
         <RecipeCard
@@ -795,6 +779,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
           pantry={pantry}
           cookedInfo={cookedInfoFor(recipe.id)}
           onOpen={setActiveRecipe}
+          onDelete={removeRecipe}
         />
       ))}
 
@@ -869,7 +854,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory }) {
 /* MODULE 2: MAKAN MANA?                                                */
 /* ------------------------------------------------------------------ */
 
-function RestaurantCard({ restaurant, onMarkEaten, cooldownDays }) {
+function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
   return (
     <motion.div layout className="rounded-3xl overflow-hidden shadow-glass mb-4">
       <div className={`h-24 bg-gradient-to-br ${restaurant.gradient} relative flex items-center justify-between p-4`}>
@@ -877,9 +862,17 @@ function RestaurantCard({ restaurant, onMarkEaten, cooldownDays }) {
         <div className="relative z-10">
           <Badge tone="kaya"><span className="flex items-center gap-1"><Percent size={11} />{restaurant.discountLabel}</span></Badge>
         </div>
-        <div className="relative z-10 flex items-center gap-1 bg-black/20 rounded-full px-2 py-1">
-          <Star size={11} className="text-kaya fill-kaya" />
-          <span className="text-[11px] font-bold text-white">{restaurant.rating}</span>
+        <div className="relative z-10 flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-black/20 rounded-full px-2 py-1">
+            <Star size={11} className="text-kaya fill-kaya" />
+            <span className="text-[11px] font-bold text-white">{restaurant.rating}</span>
+          </div>
+          <TapButton
+            onClick={() => onDelete(restaurant.id)}
+            className="w-7 h-7 rounded-full bg-black/25 flex items-center justify-center"
+          >
+            <Trash2 size={13} className="text-white" />
+          </TapButton>
         </div>
       </div>
       <div className="bg-white p-4">
@@ -903,8 +896,10 @@ function RestaurantCard({ restaurant, onMarkEaten, cooldownDays }) {
   );
 }
 
-function MakanMana({ diningHistory, setDiningHistory }) {
+function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -914,6 +909,10 @@ function MakanMana({ diningHistory, setDiningHistory }) {
     haptic(24);
   };
 
+  const removeRestaurant = (id) => {
+    setRestaurants((prev) => prev.filter((r) => r.id !== id));
+  };
+
   const cooldownDaysFor = (id) => {
     const entry = diningHistory.find((h) => h.restaurantId === id);
     if (!entry) return null;
@@ -921,22 +920,76 @@ function MakanMana({ diningHistory, setDiningHistory }) {
     return d < DINING_COOLDOWN_DAYS ? d : null;
   };
 
-  const active = RESTAURANTS.filter((r) => cooldownDaysFor(r.id) == null);
-  const onCooldown = RESTAURANTS.filter((r) => cooldownDaysFor(r.id) != null);
+  const active = restaurants.filter((r) => cooldownDaysFor(r.id) == null);
+  const onCooldown = restaurants.filter((r) => cooldownDaysFor(r.id) != null);
+
+  const search = () => {
+    if (!getApiKey()) {
+      setSearchError('Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setSearchError('Peranti tidak menyokong geolokasi.');
+      return;
+    }
+
+    setSearching(true);
+    setSearchError('');
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
+          .then((results) => {
+            if (!results.length) {
+              setSearchError('Tiada restoran halal ditemui berhampiran.');
+            } else {
+              setRestaurants(results);
+              haptic(20);
+            }
+          })
+          .catch((err) => setSearchError(friendlyGeminiError(err)))
+          .finally(() => setSearching(false));
+      },
+      () => {
+        setSearchError('Tidak dapat mengesan lokasi anda.');
+        setSearching(false);
+      }
+    );
+  };
 
   return (
     <div className="px-5 pt-4 pb-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={16} className="text-sambal" />
-        <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Sparkles size={16} className="text-sambal" />
+          <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
+        </div>
+        <TapButton
+          onClick={search}
+          disabled={searching}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-xs font-display font-bold"
+        >
+          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+          Cari
+        </TapButton>
       </div>
 
-      {active.length === 0 && (
+      {searchError && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-sambal font-semibold">
+          <AlertCircle size={14} /> {searchError}
+        </div>
+      )}
+
+      {!searching && restaurants.length === 0 && !searchError && (
+        <p className="text-xs text-charcoal/50 mb-4">Tiada tempat lagi. Tekan Cari untuk cari gerai/restoran halal berhampiran.</p>
+      )}
+
+      {restaurants.length > 0 && active.length === 0 && (
         <p className="text-xs text-charcoal/50 mb-4">Semua pilihan dalam cooldown. Semak drawer di bawah.</p>
       )}
 
       {active.map((r) => (
-        <RestaurantCard key={r.id} restaurant={r} onMarkEaten={markEaten} cooldownDays={null} />
+        <RestaurantCard key={r.id} restaurant={r} onMarkEaten={markEaten} onDelete={removeRestaurant} cooldownDays={null} />
       ))}
 
       {onCooldown.length > 0 && (
@@ -961,7 +1014,7 @@ function MakanMana({ diningHistory, setDiningHistory }) {
                 <div className="pt-4">
                   {onCooldown.map((r) => (
                     <div key={r.id} className="grayscale opacity-60">
-                      <RestaurantCard restaurant={r} onMarkEaten={markEaten} cooldownDays={cooldownDaysFor(r.id)} />
+                      <RestaurantCard restaurant={r} onMarkEaten={markEaten} onDelete={removeRestaurant} cooldownDays={cooldownDaysFor(r.id)} />
                     </div>
                   ))}
                 </div>
@@ -981,14 +1034,19 @@ function MakanMana({ diningHistory, setDiningHistory }) {
 export default function App() {
   const [active, setActive] = useState('apa');
   const [pantry, setPantry] = useState(SEED_PANTRY);
+  const [recipes, setRecipes] = useState([]);
+  const [restaurants, setRestaurants] = useState([]);
   const [cookedHistory, setCookedHistory] = useState([]);
   const [diningHistory, setDiningHistory] = useState([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
     const saved = loadState();
     if (saved) {
       setPantry(saved.pantry ?? SEED_PANTRY);
+      setRecipes(saved.recipes ?? []);
+      setRestaurants(saved.restaurants ?? []);
       setCookedHistory(saved.cookedHistory ?? []);
       setDiningHistory(saved.diningHistory ?? []);
     }
@@ -997,8 +1055,8 @@ export default function App() {
 
   useEffect(() => {
     if (!hydrated.current) return;
-    saveState({ pantry, cookedHistory, diningHistory });
-  }, [pantry, cookedHistory, diningHistory]);
+    saveState({ pantry, recipes, restaurants, cookedHistory, diningHistory });
+  }, [pantry, recipes, restaurants, cookedHistory, diningHistory]);
 
   return (
     <div className="min-h-screen bg-coconut safe-top">
@@ -1007,11 +1065,12 @@ export default function App() {
           <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
           <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
         </div>
-        <motion.div
-          className="w-11 h-11 rounded-2xl bg-gradient-to-br from-sambal to-kaya flex items-center justify-center shadow-glow animate-floatSlow"
+        <TapButton
+          onClick={() => setSettingsOpen(true)}
+          className="w-11 h-11 rounded-2xl bg-white/70 flex items-center justify-center shadow-glass"
         >
-          <CookingPot size={20} className="text-white" />
-        </motion.div>
+          <Settings size={18} className="text-charcoal" />
+        </TapButton>
       </header>
 
       <main className="pb-32">
@@ -1029,15 +1088,26 @@ export default function App() {
                 setPantry={setPantry}
                 cookedHistory={cookedHistory}
                 setCookedHistory={setCookedHistory}
+                recipes={recipes}
+                setRecipes={setRecipes}
               />
             ) : (
-              <MakanMana diningHistory={diningHistory} setDiningHistory={setDiningHistory} />
+              <MakanMana
+                diningHistory={diningHistory}
+                setDiningHistory={setDiningHistory}
+                restaurants={restaurants}
+                setRestaurants={setRestaurants}
+              />
             )}
           </motion.div>
         </AnimatePresence>
       </main>
 
       <BottomNav active={active} setActive={setActive} />
+
+      <AnimatePresence>
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
