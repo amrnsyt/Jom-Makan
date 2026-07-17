@@ -93,7 +93,7 @@ function fileToBase64(file) {
 
 function friendlyGeminiError(err) {
   if (err?.message === 'MISSING_API_KEY') {
-    return 'Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.';
+    return 'Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.';
   }
   return 'Gagal berhubung dengan Gemini. Sila cuba lagi.';
 }
@@ -187,7 +187,7 @@ function ScannerDashboard({ onIngredientsExtracted }) {
 
   const triggerScan = () => {
     if (!getApiKey()) {
-      setError('Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.');
+      setError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
       return;
     }
     setError('');
@@ -836,10 +836,8 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
   );
 }
 
-function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants }) {
+function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants, searching, searchError }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -863,55 +861,11 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   const active = restaurants.filter((r) => cooldownDaysFor(r.id) == null);
   const onCooldown = restaurants.filter((r) => cooldownDaysFor(r.id) != null);
 
-  const search = () => {
-    if (!getApiKey()) {
-      setSearchError('Sila tetapkan Gemini API Key di tetapan (ikon gear) dahulu.');
-      return;
-    }
-    if (!navigator.geolocation) {
-      setSearchError('Peranti tidak menyokong geolokasi.');
-      return;
-    }
-
-    setSearching(true);
-    setSearchError('');
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
-          .then((results) => {
-            if (!results.length) {
-              setSearchError('Tiada restoran halal ditemui berhampiran.');
-            } else {
-              setRestaurants(results);
-              haptic(20);
-            }
-          })
-          .catch((err) => setSearchError(friendlyGeminiError(err)))
-          .finally(() => setSearching(false));
-      },
-      () => {
-        setSearchError('Tidak dapat mengesan lokasi anda.');
-        setSearching(false);
-      }
-    );
-  };
-
   return (
     <div className="px-5 pt-4 pb-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-sambal" />
-          <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
-        </div>
-        <TapButton
-          onClick={search}
-          disabled={searching}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-xs font-display font-bold"
-        >
-          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-          Cari
-        </TapButton>
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles size={16} className="text-sambal" />
+        <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
       </div>
 
       {searchError && (
@@ -978,6 +932,8 @@ export default function App() {
   const [restaurants, setRestaurants] = useState([]);
   const [cookedHistory, setCookedHistory] = useState([]);
   const [diningHistory, setDiningHistory] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -997,13 +953,59 @@ export default function App() {
     saveState({ pantry, recipes, restaurants, cookedHistory, diningHistory });
   }, [pantry, recipes, restaurants, cookedHistory, diningHistory]);
 
+  const searchNearby = () => {
+    if (!getApiKey()) {
+      setSearchError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setSearchError('Peranti tidak menyokong geolokasi.');
+      return;
+    }
+
+    setSearching(true);
+    setSearchError('');
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
+          .then((results) => {
+            if (!results.length) {
+              setSearchError('Tiada restoran halal ditemui berhampiran.');
+            } else {
+              setRestaurants(results);
+              haptic(20);
+            }
+          })
+          .catch((err) => setSearchError(friendlyGeminiError(err)))
+          .finally(() => setSearching(false));
+      },
+      () => {
+        setSearchError('Tidak dapat mengesan lokasi anda.');
+        setSearching(false);
+      }
+    );
+  };
+
   return (
     <div className="min-h-screen bg-coconut safe-top">
       <div className="max-w-md mx-auto">
-        <header className="px-5 pt-6 pb-2 flex items-center justify-between">
-          <div>
-            <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
-            <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
+        <header className="px-5 pt-6 pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
+              <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
+            </div>
+            {active === 'mana' && (
+              <TapButton
+                onClick={searchNearby}
+                disabled={searching}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-xs font-display font-bold shadow-glass shrink-0"
+              >
+                {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                Cari
+              </TapButton>
+            )}
           </div>
         </header>
 
@@ -1031,6 +1033,8 @@ export default function App() {
                   setDiningHistory={setDiningHistory}
                   restaurants={restaurants}
                   setRestaurants={setRestaurants}
+                  searching={searching}
+                  searchError={searchError}
                 />
               )}
             </motion.div>
