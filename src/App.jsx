@@ -952,8 +952,14 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
   );
 }
 
-function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants, searching, searchError }) {
+const SORT_OPTIONS = [
+  { key: 'nearest', label: 'Terdekat' },
+  { key: 'rating', label: 'Rating Tertinggi' },
+];
+
+function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants, searching, searchError, onSearch }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sortBy, setSortBy] = useState('nearest');
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -974,14 +980,34 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
     return d < DINING_COOLDOWN_DAYS ? d : null;
   };
 
-  const active = restaurants.filter((r) => cooldownDaysFor(r.id) == null);
+  const parseDistance = (d) => parseFloat(String(d || '').replace(/[^\d.]/g, '')) || 999;
+
+  const sortList = (list) => {
+    const copy = [...list];
+    if (sortBy === 'rating') copy.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    else copy.sort((a, b) => parseDistance(a.distance) - parseDistance(b.distance));
+    return copy;
+  };
+
+  const active = sortList(restaurants.filter((r) => cooldownDaysFor(r.id) == null));
   const onCooldown = restaurants.filter((r) => cooldownDaysFor(r.id) != null);
+  const hasResults = restaurants.length > 0;
 
   return (
     <div className="px-5 pt-4 pb-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={16} className="text-sambal" />
-        <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Sparkles size={16} className="text-sambal" />
+          <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
+        </div>
+        {hasResults && !searching && (
+          <TapButton
+            onClick={onSearch}
+            className="flex items-center gap-1 text-[11px] font-display font-bold text-charcoal/50 bg-charcoal/5 rounded-full px-3 py-1.5"
+          >
+            <RotateCcw size={11} /> Cari Semula
+          </TapButton>
+        )}
       </div>
 
       {searching && (
@@ -995,30 +1021,71 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
       )}
 
       {searchError && (
-        <div className="mb-4 flex items-center gap-2 text-xs text-sambal font-semibold">
-          <AlertCircle size={14} /> {searchError}
+        <div className="mb-4 flex items-center gap-2 text-xs text-sambal font-semibold bg-sambal/[0.08] rounded-2xl px-3.5 py-3">
+          <AlertCircle size={16} className="shrink-0" /> {searchError}
         </div>
       )}
 
-      {!searching && restaurants.length === 0 && !searchError && (
-        <p className="text-xs text-charcoal/50 mb-4">Tiada tempat lagi. Tekan Cari untuk cari promosi/diskaun makan halal berhampiran hari ini.</p>
+      {!searching && !hasResults && !searchError && (
+        <div className="rounded-[28px] bg-gradient-to-br from-charcoal to-pandan/70 p-6 text-center overflow-hidden relative">
+          <MapPin size={120} className="absolute -right-6 -bottom-8 text-white/5" strokeWidth={1} />
+          <div className="relative z-10">
+            <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center mx-auto mb-4">
+              <Percent size={26} className="text-kaya" />
+            </div>
+            <p className="font-display font-bold text-lg text-white">Cari Promosi Hari Ini</p>
+            <p className="text-xs text-white/60 mt-1.5 leading-relaxed max-w-[240px] mx-auto">
+              Gemini akan imbas gerai & restoran halal berhampiran anda untuk diskaun & promosi yang aktif hari ini.
+            </p>
+            <TapButton
+              onClick={onSearch}
+              className="mt-5 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-sm font-display font-bold shadow-lg shadow-sambal/30"
+            >
+              <Search size={15} /> Cari Sekarang
+            </TapButton>
+          </div>
+        </div>
       )}
 
-      {restaurants.length > 0 && active.length === 0 && (
-        <p className="text-xs text-charcoal/50 mb-4">Semua pilihan dalam cooldown. Semak drawer di bawah.</p>
-      )}
+      {!searching && hasResults && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] text-charcoal/45 font-semibold">
+              {active.length} promosi ditemui berhampiran
+            </p>
+            <div className="flex items-center gap-1.5">
+              {SORT_OPTIONS.map((opt) => (
+                <TapButton
+                  key={opt.key}
+                  onClick={() => setSortBy(opt.key)}
+                  className={`text-[11px] font-display font-bold rounded-full px-3 py-1.5 ${
+                    sortBy === opt.key ? 'bg-charcoal text-white' : 'bg-charcoal/5 text-charcoal/50'
+                  }`}
+                >
+                  {opt.label}
+                </TapButton>
+              ))}
+            </div>
+          </div>
 
-      {active.map((r) => (
-        <RestaurantCard key={r.id} restaurant={r} onMarkEaten={markEaten} onDelete={removeRestaurant} cooldownDays={null} />
-      ))}
+          {active.length === 0 && (
+            <p className="text-xs text-charcoal/50 mb-4">Semua pilihan dalam cooldown. Semak drawer di bawah.</p>
+          )}
+
+          {active.map((r) => (
+            <RestaurantCard key={r.id} restaurant={r} onMarkEaten={markEaten} onDelete={removeRestaurant} cooldownDays={null} />
+          ))}
+        </>
+      )}
 
       {onCooldown.length > 0 && (
         <div className="mt-2">
           <TapButton
             onClick={() => setDrawerOpen((o) => !o)}
-            className="w-full flex items-center justify-between glass rounded-2xl px-4 py-3"
+            className="w-full flex items-center justify-between bg-white shadow-sm border border-charcoal/5 rounded-2xl px-4 py-3.5"
           >
-            <span className="text-xs font-display font-bold text-charcoal">
+            <span className="flex items-center gap-2 text-xs font-display font-bold text-charcoal">
+              <Clock size={14} className="text-charcoal/40" />
               Baru Dilawati (Cooldown) · {onCooldown.length}
             </span>
             <ChevronDown size={16} className={`text-charcoal transition-transform ${drawerOpen ? 'rotate-180' : ''}`} />
@@ -1172,6 +1239,7 @@ export default function App() {
                   setRestaurants={setRestaurants}
                   searching={searching}
                   searchError={searchError}
+                  onSearch={searchNearby}
                 />
               )}
             </motion.div>
