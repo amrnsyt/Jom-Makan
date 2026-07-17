@@ -999,42 +999,44 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-coconut safe-top">
-      <header className="px-5 pt-6 pb-2 flex items-center justify-between">
-        <div>
-          <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
-          <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
-        </div>
-      </header>
+      <div className="max-w-md mx-auto">
+        <header className="px-5 pt-6 pb-2 flex items-center justify-between">
+          <div>
+            <p className="font-display font-extrabold text-2xl text-charcoal leading-tight">JomMakan</p>
+            <p className="text-xs text-charcoal/50 font-medium">Apa & Mana</p>
+          </div>
+        </header>
 
-      <main className="pb-32">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={active}
-            initial={{ opacity: 0, x: active === 'apa' ? -16 : 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: active === 'apa' ? 16 : -16 }}
-            transition={{ duration: 0.22 }}
-          >
-            {active === 'apa' ? (
-              <MakanApa
-                pantry={pantry}
-                setPantry={setPantry}
-                cookedHistory={cookedHistory}
-                setCookedHistory={setCookedHistory}
-                recipes={recipes}
-                setRecipes={setRecipes}
-              />
-            ) : (
-              <MakanMana
-                diningHistory={diningHistory}
-                setDiningHistory={setDiningHistory}
-                restaurants={restaurants}
-                setRestaurants={setRestaurants}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+        <main className="pb-32">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={active}
+              initial={{ opacity: 0, x: active === 'apa' ? -16 : 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: active === 'apa' ? 16 : -16 }}
+              transition={{ duration: 0.22 }}
+            >
+              {active === 'apa' ? (
+                <MakanApa
+                  pantry={pantry}
+                  setPantry={setPantry}
+                  cookedHistory={cookedHistory}
+                  setCookedHistory={setCookedHistory}
+                  recipes={recipes}
+                  setRecipes={setRecipes}
+                />
+              ) : (
+                <MakanMana
+                  diningHistory={diningHistory}
+                  setDiningHistory={setDiningHistory}
+                  restaurants={restaurants}
+                  setRestaurants={setRestaurants}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
 
       <BottomNav active={active} setActive={setActive} />
     </div>
