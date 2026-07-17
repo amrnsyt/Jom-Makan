@@ -871,6 +871,11 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
         <p className="font-display font-bold text-charcoal">{restaurant.name}</p>
         <p className="text-xs text-charcoal/50 mt-0.5">{restaurant.cuisine} · {restaurant.distance}</p>
         <p className="text-sm text-sambal font-semibold mt-2">{restaurant.promo}</p>
+        {restaurant.dateAvailability && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-charcoal/50">
+            <Clock size={11} /> {restaurant.dateAvailability}
+          </div>
+        )}
         {cooldownDays != null ? (
           <div className="mt-3 flex items-center gap-2 text-xs text-charcoal/50">
             <Clock size={12} /> Melawat {cooldownDays} hari lalu
@@ -933,7 +938,7 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
       )}
 
       {!searching && restaurants.length === 0 && !searchError && (
-        <p className="text-xs text-charcoal/50 mb-4">Tiada tempat lagi. Tekan Cari untuk cari gerai/restoran halal berhampiran.</p>
+        <p className="text-xs text-charcoal/50 mb-4">Tiada tempat lagi. Tekan Cari untuk cari promosi/diskaun makan halal berhampiran hari ini.</p>
       )}
 
       {restaurants.length > 0 && active.length === 0 && (
@@ -992,6 +997,7 @@ export default function App() {
   const [diningHistory, setDiningHistory] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -1023,13 +1029,15 @@ export default function App() {
 
     setSearching(true);
     setSearchError('');
+    setNotFoundOpen(false);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
           .then((results) => {
             if (!results.length) {
-              setSearchError('Tiada restoran halal ditemui berhampiran.');
+              setSearchError('Tiada promosi/diskaun makan halal ditemui berhampiran hari ini.');
+              setNotFoundOpen(true);
             } else {
               setRestaurants(results);
               haptic(20);
@@ -1101,6 +1109,51 @@ export default function App() {
       </div>
 
       <BottomNav active={active} setActive={setActive} />
+
+      <AnimatePresence>
+        {notFoundOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-charcoal/60 flex items-end"
+            onClick={() => setNotFoundOpen(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 260 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md mx-auto bg-coconut rounded-t-[32px] p-6 safe-bottom"
+            >
+              <div className="w-10 h-1.5 bg-charcoal/20 rounded-full mx-auto mb-5" />
+              <div className="w-14 h-14 rounded-2xl bg-sambal/10 flex items-center justify-center mx-auto mb-4">
+                <Search size={24} className="text-sambal" />
+              </div>
+              <p className="font-display font-bold text-xl text-charcoal text-center">Tiada Promosi Ditemui</p>
+              <p className="text-xs text-charcoal/50 text-center mt-1">
+                Gemini tidak menjumpai sebarang promosi/diskaun makan halal berhampiran anda hari ini.
+              </p>
+              <div className="mt-5 bg-white/70 rounded-2xl p-4">
+                <p className="text-xs font-display font-bold text-charcoal mb-2.5">Kemungkinan sebab:</p>
+                <ul className="text-xs text-charcoal/60 space-y-1.5 list-disc pl-4">
+                  <li>Tiada gerai/restoran berhampiran mempunyai tawaran istimewa aktif buat masa ini.</li>
+                  <li>Lokasi GPS peranti anda mungkin tidak tepat atau kurang jelas.</li>
+                  <li>Maklumat promosi terkini mungkin belum diindeks oleh carian Google.</li>
+                  <li>Kawasan anda mungkin mempunyai liputan gerai halal yang terhad.</li>
+                </ul>
+              </div>
+              <TapButton
+                onClick={() => setNotFoundOpen(false)}
+                className="w-full mt-5 py-3 rounded-2xl bg-gradient-to-r from-sambal to-kaya text-white font-display font-bold text-sm flex items-center justify-center gap-2"
+              >
+                <Check size={16} /> OK, Faham
+              </TapButton>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -115,9 +115,17 @@ export async function generateRecipes(pantryItems) {
 }
 
 export async function findNearbyHalalRestaurants(lat, lng) {
-  const prompt = `Find real halal food restaurants or food stalls near latitude ${lat}, longitude ${lng} in Malaysia. For each, give the name, cuisine type, a short promo or highlight text, a rating out of 5, and approximate distance from the given coordinates. Respond ONLY with a JSON array, no other text, in this exact format:
-[{"name": "...", "cuisine": "...", "promo": "...", "discountLabel": "...", "rating": number, "distance": "e.g. 1.2 km"}]
-Return up to 6 results, closest first.`;
+  const prompt = `Search for: "promosi/diskaun makan halal/restaurant near me hari ini" — find real halal food stalls or restaurants near latitude ${lat}, longitude ${lng} in Malaysia that have an active promotion or discount today. For each one, give:
+- name: the stall/restaurant name
+- promo: the promotion/discount details (promosi/diskaun)
+- discountLabel: a short badge version of the promo (e.g. "20% OFF", "Beli 1 Percuma 1")
+- distance: approximate distance from the given coordinates (e.g. "1.2 km")
+- dateAvailability: the date(s) or period the promotion is valid for (e.g. "Hari ini sahaja", "17-20 Julai 2026", "Setiap Isnin")
+- cuisine: the type of food
+- rating: a rating out of 5
+Respond ONLY with a JSON array, no other text, in this exact format:
+[{"name": "...", "cuisine": "...", "promo": "...", "discountLabel": "...", "dateAvailability": "...", "rating": number, "distance": "e.g. 1.2 km"}]
+Return up to 6 results, closest first. If no restaurants with an active promotion/discount today are found nearby, respond with [].`;
 
   const text = await callGemini({
     parts: [{ text: prompt }],
