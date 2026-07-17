@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, Sparkles, ScanLine, Trash2, ChevronRight, ChevronLeft,
   Timer as TimerIcon, PackageOpen, Percent, Star, ChevronDown, CookingPot,
   Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw,
-  Search, Loader2, AlertCircle
+  Search, Loader2, AlertCircle, Upload
 } from 'lucide-react';
 import { getApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
 
@@ -183,15 +183,16 @@ function ScannerDashboard({ onIngredientsExtracted }) {
   const [scanning, setScanning] = useState(false);
   const [extracted, setExtracted] = useState(null);
   const [error, setError] = useState('');
-  const inputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  const triggerScan = () => {
+  const triggerScan = (ref) => {
     if (!getApiKey()) {
       setError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
       return;
     }
     setError('');
-    inputRef.current?.click();
+    ref.current?.click();
   };
 
   const handleFile = async (e) => {
@@ -220,6 +221,10 @@ function ScannerDashboard({ onIngredientsExtracted }) {
     }
   };
 
+  const updateField = (id, field, value) => {
+    setExtracted((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
   const updateQty = (id, delta) => {
     setExtracted((prev) =>
       prev.map((item) => (item.id === id ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
@@ -239,18 +244,22 @@ function ScannerDashboard({ onIngredientsExtracted }) {
   return (
     <div className="mb-6">
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         onChange={handleFile}
         className="hidden"
       />
-      <TapButton
-        onClick={triggerScan}
-        disabled={scanning}
-        className="relative w-full h-44 rounded-3xl overflow-hidden bg-charcoal shadow-glass"
-      >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        className="hidden"
+      />
+
+      <div className="relative w-full rounded-3xl overflow-hidden bg-charcoal shadow-glass">
         <div className="absolute inset-0 bg-gradient-to-br from-charcoal via-charcoal to-pandan/40" />
         <div
           className="absolute inset-0 opacity-30"
@@ -261,29 +270,48 @@ function ScannerDashboard({ onIngredientsExtracted }) {
         />
         {scanning && (
           <motion.div
-            className="absolute left-0 right-0 h-1.5 bg-kaya shadow-glow"
-            animate={{ y: ['0%', '1000%'] }}
+            className="absolute left-0 right-0 h-1.5 bg-kaya shadow-glow z-10"
+            animate={{ y: ['0%', '3000%'] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
           />
         )}
-        <div className="relative z-10 h-full flex flex-col items-center justify-center gap-3 text-white">
+        <div className="relative z-10 px-5 pt-6 pb-5 flex flex-col items-center text-white">
           <motion.div
             animate={scanning ? { scale: [1, 1.15, 1] } : { y: [0, -4, 0] }}
             transition={{ duration: scanning ? 1 : 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center"
+            className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center"
           >
-            {scanning ? <ScanLine size={28} className="text-kaya" /> : <Camera size={28} />}
+            {scanning ? <ScanLine size={24} className="text-kaya" /> : <PackageOpen size={24} />}
           </motion.div>
-          <div className="text-center">
+          <div className="text-center mt-3">
             <p className="font-display font-bold text-sm">
               {scanning ? 'Gemini sedang menganalisis...' : 'Imbas Bahan Dapur Anda'}
             </p>
             <p className="text-[11px] text-white/60 mt-0.5">
-              {scanning ? 'Mengenal pasti bahan & kuantiti' : 'Ketik untuk ambil gambar bahan dapur'}
+              {scanning ? 'Mengenal pasti bahan, kuantiti & saiz' : 'Ambil gambar atau muat naik imej bahan dapur'}
             </p>
           </div>
+
+          <div className="w-full flex gap-2.5 mt-4">
+            <TapButton
+              onClick={() => triggerScan(cameraInputRef)}
+              disabled={scanning}
+              className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-2xl bg-white/10 border border-white/15"
+            >
+              <Camera size={20} />
+              <span className="text-[11px] font-display font-bold">Ambil Gambar</span>
+            </TapButton>
+            <TapButton
+              onClick={() => triggerScan(fileInputRef)}
+              disabled={scanning}
+              className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-2xl bg-white/10 border border-white/15"
+            >
+              <Upload size={20} />
+              <span className="text-[11px] font-display font-bold">Muat Naik Fail</span>
+            </TapButton>
+          </div>
         </div>
-      </TapButton>
+      </div>
 
       {error && (
         <div className="mt-3 flex items-center gap-2 text-xs text-sambal font-semibold px-1">
@@ -299,38 +327,56 @@ function ScannerDashboard({ onIngredientsExtracted }) {
             exit={{ opacity: 0, height: 0 }}
             className="mt-4 glass rounded-3xl p-4 shadow-glass overflow-hidden"
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-1">
               <Sparkles size={16} className="text-sambal" />
               <p className="font-display font-bold text-sm text-charcoal">Bahan Dikesan</p>
             </div>
+            <p className="text-[11px] text-charcoal/50 mb-3">Sunting nama, kuantiti & unit jika perlu.</p>
             <div className="space-y-2">
               {extracted.map((item) => (
-                <div key={item.id} className="flex items-center justify-between bg-white/70 rounded-2xl px-3 py-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-charcoal truncate">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <TapButton
-                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? -1 : -50)}
-                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
-                    >
-                      <Minus size={13} className="text-charcoal" />
-                    </TapButton>
-                    <span className="text-xs font-bold w-14 text-center text-charcoal">
-                      {item.qty}{item.unit}
-                    </span>
-                    <TapButton
-                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? 1 : 50)}
-                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center"
-                    >
-                      <Plus size={13} className="text-charcoal" />
-                    </TapButton>
+                <div key={item.id} className="bg-white/70 rounded-2xl px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => updateField(item.id, 'name', e.target.value)}
+                      className="flex-1 min-w-0 text-sm font-semibold text-charcoal bg-transparent outline-none border-b border-transparent focus:border-charcoal/20"
+                    />
                     <TapButton
                       onClick={() => removeItem(item.id)}
-                      className="w-7 h-7 rounded-full bg-sambal/10 flex items-center justify-center"
+                      className="w-7 h-7 rounded-full bg-sambal/10 flex items-center justify-center shrink-0"
                     >
                       <X size={13} className="text-sambal" />
                     </TapButton>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <TapButton
+                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? -1 : -50)}
+                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center shrink-0"
+                    >
+                      <Minus size={13} className="text-charcoal" />
+                    </TapButton>
+                    <input
+                      type="number"
+                      value={item.qty}
+                      onChange={(e) => updateField(item.id, 'qty', Math.max(0, Number(e.target.value) || 0))}
+                      className="w-16 text-xs font-bold text-center text-charcoal bg-charcoal/5 rounded-lg py-1.5 outline-none"
+                    />
+                    <TapButton
+                      onClick={() => updateQty(item.id, item.unit === 'pcs' ? 1 : 50)}
+                      className="w-7 h-7 rounded-full bg-charcoal/10 flex items-center justify-center shrink-0"
+                    >
+                      <Plus size={13} className="text-charcoal" />
+                    </TapButton>
+                    <select
+                      value={item.unit}
+                      onChange={(e) => updateField(item.id, 'unit', e.target.value)}
+                      className="text-xs font-bold text-charcoal bg-charcoal/5 rounded-lg py-1.5 px-2 outline-none ml-auto"
+                    >
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                      <option value="pcs">pcs</option>
+                    </select>
                   </div>
                 </div>
               ))}
