@@ -1,5 +1,6 @@
-const CACHE_NAME = 'jommakan-cache-v1';
-const CORE_ASSETS = ['/', '/index.html', '/manifest.json'];
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `jommakan-cache-${CACHE_VERSION}`;
+const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,4 +34,8 @@ self.addEventListener('fetch', (event) => {
         caches.match(event.request).then((cached) => cached || caches.match('/index.html'))
       )
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
