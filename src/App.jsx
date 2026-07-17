@@ -696,26 +696,26 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
   const [genError, setGenError] = useState('');
 
   const addIngredients = useCallback((items) => {
-    let nextPantry = pantry;
-    setPantry((prev) => {
-      const next = [...prev];
-      items.forEach((item) => {
-        const existing = next.find((p) => normalize(p.name) === normalize(item.name));
-        if (existing) {
-          existing.qty += item.qty;
-        } else {
-          next.push({ id: `pantry-${Date.now()}-${Math.random()}`, name: item.name, qty: item.qty, unit: item.unit });
-        }
-      });
-      nextPantry = next;
-      return next;
+    const merged = [...pantry];
+    items.forEach((item) => {
+      const idx = merged.findIndex((p) => normalize(p.name) === normalize(item.name));
+      if (idx >= 0) {
+        merged[idx] = { ...merged[idx], qty: merged[idx].qty + item.qty };
+      } else {
+        merged.push({ id: `pantry-${Date.now()}-${Math.random()}`, name: item.name, qty: item.qty, unit: item.unit });
+      }
     });
+
+    setPantry(merged);
 
     setGenerating(true);
     setGenError('');
-    generateRecipes(nextPantry)
+    generateRecipes(merged)
       .then((newRecipes) => setRecipes(newRecipes))
-      .catch((err) => setGenError(friendlyGeminiError(err)))
+      .catch((err) => {
+        console.error('[JomMakan] generateRecipes failed:', err);
+        setGenError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
+      })
       .finally(() => setGenerating(false));
   }, [pantry, setPantry, setRecipes]);
 
@@ -1161,34 +1161,40 @@ export default function App() {
     setSearchError('');
     setNotFoundOpen(false);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
-          .then((results) => {
-            if (!results.length) {
-              setSearchError('Tiada promosi/diskaun makan halal ditemui berhampiran hari ini.');
-              setNotFoundOpen(true);
-            } else {
-              setRestaurants(results);
-              haptic(20);
-            }
-          })
-          .catch((err) => {
-            console.error('[JomMakan] findNearbyHalalRestaurants failed:', err);
-            setSearchError(friendlyGeminiError(err));
-          })
-          .finally(() => setSearching(false));
-      },
-      (err) => {
-        setSearchError(
-          err?.code === 1
-            ? 'Kebenaran lokasi ditolak. Sila benarkan akses lokasi di tetapan pelayar.'
-            : 'Tidak dapat mengesan lokasi anda. Sila pastikan GPS dihidupkan.'
-        );
-        setSearching(false);
-      },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-    );
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
+            .then((results) => {
+              if (!results.length) {
+                setSearchError('Tiada promosi/diskaun makan halal ditemui berhampiran hari ini.');
+                setNotFoundOpen(true);
+              } else {
+                setRestaurants(results);
+                haptic(20);
+              }
+            })
+            .catch((err) => {
+              console.error('[JomMakan] findNearbyHalalRestaurants failed:', err);
+              setSearchError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
+            })
+            .finally(() => setSearching(false));
+        },
+        (err) => {
+          setSearchError(
+            err?.code === 1
+              ? 'Kebenaran lokasi ditolak. Sila benarkan akses lokasi di tetapan pelayar.'
+              : 'Tidak dapat mengesan lokasi anda. Sila pastikan GPS dihidupkan.'
+          );
+          setSearching(false);
+        },
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+      );
+    } catch (err) {
+      console.error('[JomMakan] getCurrentPosition threw synchronously:', err);
+      setSearchError(`Ralat lokasi tidak dijangka. (${err?.message || 'unknown'})`);
+      setSearching(false);
+    }
   };
 
   return (
