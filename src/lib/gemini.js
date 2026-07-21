@@ -1,10 +1,9 @@
 // File Path: src/lib/gemini.js
-// Client service routing requests to secure Vercel backend + Geospatial Caching
+// Client service routing requests to secure Vercel backend + Geospatial Caching & GPS Fallback
 
 const RESTO_CACHE_KEY = 'jommakan_geo_cache_v1';
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 Hours TTL
 
-// Check if server is reachable / key configured (optional check for frontend UX)
 export function getApiKey() {
   return 'VERCEL_SECURED_KEY'; 
 }
@@ -67,9 +66,36 @@ export async function generateRecipes(pantryItems) {
 }
 
 export async function findNearbyHalalRestaurants(lat, lng) {
+  // Jika koordinat tidak diberikan dari UI, cuba dapatkan melalui GPS pelayar dengan Fallback automatik
+  let targetLat = lat;
+  let targetLng = lng;
+
+  if (!targetLat || !targetLng) {
+    try {
+      const position = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          timeout: 7000,
+          maximumAge: 60000,
+          enableHighAccuracy: false
+        });
+      });
+      targetLat = position.coords.latitude;
+      targetLng = position.coords.longitude;
+    } catch (geoErr) {
+      console.warn('[JomMakan] GPS gagal dikesan/ditolak. Menggunakan lokasi lalai (Kuala Lumpur).', geoErr);
+      // Fallback koordinat pusat (Kuala Lumpur)
+      targetLat = 3.1390;
+      targetLng = 101.6869;
+    }
+  }
+
   // 1. Round coordinates to 2 decimal places (~1.1km grid) for effective geospatial matching
-  const gridLat = Number(lat).toFixed(2);
-  const gridLng = Number(lng).toFixed(2);
+  const gridLat = Number(targetLat).toFixed(2);
+  const gridLng = Number(targetLng).toFixed(2);
   const cacheKey = `${gridLat}_${gridLng}`;
 
   // 2. Check local storage cache before making an API call
@@ -88,7 +114,7 @@ export async function findNearbyHalalRestaurants(lat, lng) {
   }
 
   // 3. If cache miss or expired, call Gemini API via Serverless backend
-  const items = await callServerlessApi('findNearbyHalalRestaurants', { lat, lng });
+  const items = await callServerlessApi('findNearbyHalalRestaurants', { lat: targetLat, lng: targetLng });
   const gradients = [
     'from-sambal to-charcoal',
     'from-kaya to-sambal',
@@ -117,4 +143,10 @@ export async function findNearbyHalalRestaurants(lat, lng) {
   }
 
   return processedResults;
+}
+
+export async function compressImage(file, maxDim = 800, quality = 0.7) {
+  // Disertakan bersama modul utiliti jika diperlukan oleh komponen
+  const { compressImage: comp } = await import('./image-compressor.js');
+  return comp(file, maxDim, quality);
 }
