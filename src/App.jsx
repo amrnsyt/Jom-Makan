@@ -8,6 +8,7 @@ import {
   Search, Loader2, AlertCircle, Upload
 } from 'lucide-react';
 import { getApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
+import { compressImage } from './lib/image-compressor';
 
 /* ------------------------------------------------------------------ */
 /* CONSTANTS & SEED DATA                                              */
@@ -18,7 +19,6 @@ const FATIGUE_DAYS = 4;
 const DINING_COOLDOWN_DAYS = 14;
 
 const RECIPE_ICONS = { rendang: Beef, ayam: Drumstick, ikan: Fish, nasi: Soup, western: Salad };
-
 const SEED_PANTRY = [
   { id: 'p1', name: 'Ayam (Chicken)', qty: 1000, unit: 'g' },
   { id: 'p2', name: 'Bawang Merah (Shallots)', qty: 8, unit: 'pcs' },
@@ -79,18 +79,6 @@ function formatTime(seconds) {
   return `${m}:${s}`;
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      resolve(String(result).split(',')[1] || '');
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function friendlyGeminiError(err) {
   if (err?.message === 'MISSING_API_KEY') {
     return 'Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.';
@@ -110,7 +98,6 @@ function friendlyGeminiError(err) {
 
 function TapButton({ children, onClick, className = '', disabled, ...rest }) {
   const [ripples, setRipples] = useState([]);
-
   const addRipple = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const size = Math.max(rect.width, rect.height) * 1.8;
@@ -120,7 +107,6 @@ function TapButton({ children, onClick, className = '', disabled, ...rest }) {
     setRipples((prev) => [...prev, { id, x, y, size }]);
     setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 600);
   };
-
   return (
     <motion.button
       whileTap={{ scale: 0.96 }}
@@ -211,7 +197,7 @@ function ScannerDashboard({ onIngredientsExtracted }) {
   const [error, setError] = useState('');
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
-
+  
   const triggerScan = (ref) => {
     if (!getApiKey()) {
       setError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
@@ -230,10 +216,12 @@ function ScannerDashboard({ onIngredientsExtracted }) {
     setScanning(true);
     setExtracted(null);
     setError('');
-
+    
     try {
-      const base64 = await fileToBase64(file);
+      // Compress image client-side to 800x800px before uploading (Saves up to 85% Vision Tokens!)
+      const base64 = await compressImage(file, 800, 0.7);
       const items = await analyzePantryImage(base64, file.type || 'image/jpeg');
+      
       if (!items.length) {
         setError('Tiada bahan dikesan dalam imej. Cuba lagi dengan imej yang lebih jelas.');
       } else {
@@ -260,13 +248,13 @@ function ScannerDashboard({ onIngredientsExtracted }) {
   const removeItem = (id) => {
     setExtracted((prev) => prev.filter((item) => item.id !== id));
   };
-
+  
   const confirm = () => {
     if (!extracted?.length) return;
     onIngredientsExtracted(extracted);
     setExtracted(null);
   };
-
+  
   return (
     <div className="mb-6">
       <input
@@ -495,7 +483,6 @@ function RecipeCard({ recipe, pantry, cookedInfo, onOpen, onDelete }) {
   const matchPct = Math.round(match * 100);
   const Icon = RECIPE_ICONS[recipe.kind] || CookingPot;
   const isFatigued = cookedInfo && cookedInfo.days < FATIGUE_DAYS;
-
   return (
     <motion.div
       layout
@@ -555,7 +542,7 @@ function StepTimer({ duration }) {
     setRemaining(duration);
     setRunning(false);
   }, [duration]);
-
+  
   useEffect(() => {
     if (running && remaining > 0) {
       intervalRef.current = setInterval(() => {
@@ -572,11 +559,10 @@ function StepTimer({ duration }) {
     }
     return () => clearInterval(intervalRef.current);
   }, [running]);
-
+  
   if (!duration) return null;
 
   const pct = ((duration - remaining) / duration) * 100;
-
   return (
     <div className="glass rounded-3xl p-4 mt-4 flex items-center gap-4">
       <div className="relative w-16 h-16 shrink-0">
@@ -694,7 +680,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
   const [tutorialRecipe, setTutorialRecipe] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
-
+  
   const addIngredients = useCallback((items) => {
     const merged = [...pantry];
     items.forEach((item) => {
@@ -718,9 +704,9 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
       })
       .finally(() => setGenerating(false));
   }, [pantry, setPantry, setRecipes]);
-
+  
   const removePantryItem = (id) => setPantry((prev) => prev.filter((p) => p.id !== id));
-
+  
   const refreshRecipes = useCallback(() => {
     if (!pantry.length || generating) return;
     haptic(16);
@@ -734,19 +720,19 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
       })
       .finally(() => setGenerating(false));
   }, [pantry, generating, setRecipes]);
-
+  
   const removeRecipe = (id) => {
     setRecipes((prev) => prev.filter((r) => r.id !== id));
     setActiveRecipe((cur) => (cur?.id === id ? null : cur));
     setTutorialRecipe((cur) => (cur?.id === id ? null : cur));
   };
-
+  
   const cookedInfoFor = (recipeId) => {
     const entry = cookedHistory.find((h) => h.recipeId === recipeId);
     if (!entry) return null;
     return { days: daysAgo(entry.date) };
   };
-
+  
   const sortedRecipes = useMemo(() => {
     return [...recipes].sort((a, b) => {
       const aInfo = cookedInfoFor(a.id);
@@ -758,7 +744,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pantry, cookedHistory, recipes]);
-
+  
   const finishCooking = (recipe) => {
     setPantry((prev) => {
       const next = [...prev];
@@ -996,16 +982,16 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   const removeRestaurant = (id) => {
     setRestaurants((prev) => prev.filter((r) => r.id !== id));
   };
-
+  
   const cooldownDaysFor = (id) => {
     const entry = diningHistory.find((h) => h.restaurantId === id);
     if (!entry) return null;
     const d = daysAgo(entry.date);
     return d < DINING_COOLDOWN_DAYS ? d : null;
   };
-
+  
   const parseDistance = (d) => parseFloat(String(d || '').replace(/[^\d.]/g, '')) || 999;
-
+  
   const sortList = (list) => {
     const copy = [...list];
     if (sortBy === 'rating') copy.sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -1016,7 +1002,7 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   const active = sortList(restaurants.filter((r) => cooldownDaysFor(r.id) == null));
   const onCooldown = restaurants.filter((r) => cooldownDaysFor(r.id) != null);
   const hasResults = restaurants.length > 0;
-
+  
   return (
     <div className="px-5 pt-4 pb-4">
       <div className="flex items-center justify-between mb-4">
@@ -1165,12 +1151,12 @@ export default function App() {
     }
     hydrated.current = true;
   }, []);
-
+  
   useEffect(() => {
     if (!hydrated.current) return;
     saveState({ pantry, recipes, restaurants, cookedHistory, diningHistory });
   }, [pantry, recipes, restaurants, cookedHistory, diningHistory]);
-
+  
   useEffect(() => {
     const checkVersion = () => {
       fetch('/version.json', { cache: 'no-store' })
@@ -1194,7 +1180,7 @@ export default function App() {
       clearInterval(interval);
     };
   }, []);
-
+  
   const searchNearby = async () => {
     if (!getApiKey()) {
       setSearchError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
@@ -1258,7 +1244,7 @@ export default function App() {
       setSearching(false);
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-coconut safe-top">
       <div className="max-w-md mx-auto">
