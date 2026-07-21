@@ -55,7 +55,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Kunci API (GEMINI_API_KEY) tidak ditetapkan di Vercel Environment Variables.' });
+    return res.status(500).json({ error: 'MISSING_API_KEY: Server environment variable GEMINI_API_KEY is not configured.' });
   }
 
   const { action, payload } = req.body;
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
     } else if (action === 'findNearbyHalalRestaurants') {
       tools = [{ google_search: {} }];
       parts = [
-        { text: `Search for: "promosi/diskaun makan halal/restaurant near me hari ini" — find real halal food stalls or restaurants near latitude ${payload.lat}, longitude ${payload.lng} in Malaysia that have an active promotion or discount today. For each one, give: name, promo, discountLabel (e.g. "20% OFF"), distance (e.g. "1.2 km"), dateAvailability, cuisine, and rating out of 5. Respond ONLY with a valid JSON array in this exact format: [{"name": "...", "cuisine": "...", "promo": "...", "discountLabel": "...", "dateAvailability": "...", "rating": number, "distance": "e.g. 1.2 km"}]. Return up to 6 results, closest first.` }
+        { text: `Search for halal food spots, restaurants, or food stalls near latitude ${payload.lat}, longitude ${payload.lng} in Malaysia. Find places that have good reviews or active promotions. For each one, provide: name, promo (or description), discountLabel (e.g. "Halal", "Popular", "10% OFF"), distance (e.g. "1.2 km"), dateAvailability ("Hari Ini"), cuisine, and rating out of 5. Respond ONLY with a valid JSON array in this exact format: [{"name": "...", "cuisine": "...", "promo": "...", "discountLabel": "...", "dateAvailability": "...", "rating": number, "distance": "e.g. 1.2 km"}]. Return up to 6 results, closest first.` }
       ];
     } else {
       return res.status(400).json({ error: 'Invalid action specified' });
@@ -103,13 +103,13 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      return res.status(response.status).json({ error: `Google API Error (${response.status}): ${errText}` });
+      return res.status(response.status).json({ error: `GEMINI_API_ERROR (${response.status}): ${errText}` });
     }
 
     const data = await response.json();
     const candidate = data.candidates?.[0];
     const text = (candidate?.content?.parts || []).map((p) => p.text || '').join('');
-    
+
     const match = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
     const parsedJson = match ? JSON.parse(match[0]) : [];
 
