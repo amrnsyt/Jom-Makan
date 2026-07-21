@@ -1,7 +1,7 @@
 // File Path: api/gemini.js
 // Vercel Serverless Function to keep API keys secure and enforce Structured Outputs
 
-const MODEL = 'gemini-1.5-flash';
+const MODEL = 'gemini-3.5-flash';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const SCHEMAS = {
