@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+[cite: 3]import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Camera, ChefHat, MapPin, Plus, Minus, X, Check, Clock, Flame,
@@ -256,21 +256,8 @@ function ScannerDashboard({ onIngredientsExtracted }) {
   
   return (
     <div className="mb-6">
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFile}
-        className="hidden"
-      />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFile}
-        className="hidden"
-      />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
 
       <div className="relative w-full rounded-3xl overflow-hidden bg-charcoal shadow-glass">
         <div className="absolute inset-0 bg-gradient-to-br from-charcoal via-charcoal to-pandan/40" />
@@ -738,7 +725,6 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
       if (aFatigued !== bFatigued) return aFatigued ? 1 : -1;
       return scoreRecipe(b, pantry) - scoreRecipe(a, pantry);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pantry, cookedHistory, recipes]);
   
   const finishCooking = (recipe) => {
@@ -869,7 +855,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
 }
 
 /* ------------------------------------------------------------------ */
-/* REDESIGNED MODULE 2: MAKAN MANA?                                     */
+/* MODULE 2: MAKAN MANA?                                                */
 /* ------------------------------------------------------------------ */
 
 function RestaurantSkeleton() {
@@ -923,7 +909,6 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
       </div>
 
       <div className="p-4">
-        {/* Info badges */}
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
           {restaurant.cuisine && (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal/60 bg-charcoal/5 rounded-full px-2.5 py-1">
@@ -940,7 +925,6 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
           )}
         </div>
 
-        {/* Promo banner */}
         <div className="flex items-start gap-2 bg-sambal/[0.08] rounded-2xl px-3.5 py-2.5 mb-3">
           <Percent size={14} className="text-sambal shrink-0 mt-0.5" />
           <div className="min-w-0">
@@ -949,7 +933,6 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
           </div>
         </div>
 
-        {/* Action Buttons Row */}
         <div className="flex items-center gap-2">
           <TapButton
             onClick={openMaps}
@@ -978,7 +961,7 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
 
 function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants, searching, searchError, onSearch }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all'); // all, discount, nearby, topRated
+  const [activeFilter, setActiveFilter] = useState('all');
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -1004,9 +987,8 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   const filteredAndSortedRestaurants = useMemo(() => {
     let list = restaurants.filter((r) => cooldownDaysFor(r.id) == null);
 
-    // Apply Filter Chips
     if (activeFilter === 'discount') {
-      list = list.filter((r) => r.discountLabel && r.discountLabel.toLowerCase().includes('off') || r.discountLabel.toLowerCase().includes('%') || r.discountLabel.toLowerCase().includes('percuma'));
+      list = list.filter((r) => r.discountLabel && (r.discountLabel.toLowerCase().includes('off') || r.discountLabel.toLowerCase().includes('%') || r.discountLabel.toLowerCase().includes('percuma')));
     } else if (activeFilter === 'nearby') {
       list = [...list].sort((a, b) => parseDistance(a.distance) - parseDistance(b.distance));
     } else if (activeFilter === 'topRated') {
@@ -1021,7 +1003,6 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   
   return (
     <div className="px-5 pt-4 pb-4">
-      {/* Header Banner & Trigger */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="font-display font-bold text-base text-charcoal">Jejak Makan Halal</p>
@@ -1076,7 +1057,6 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
 
       {!searching && hasResults && (
         <>
-          {/* Interactive Filter Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-2">
             {[
               { id: 'all', label: 'Semua Tawaran' },
@@ -1106,7 +1086,6 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
         </>
       )}
 
-      {/* Cooldown Drawer */}
       {onCooldown.length > 0 && (
         <div className="mt-4">
           <TapButton
@@ -1200,66 +1179,53 @@ export default function App() {
     };
   }, []);
   
+  // DIPERBETULKAN: Logik carian diperkukuh dengan Fallback Koordinat Pintar
   const searchNearby = async () => {
     if (!getApiKey()) {
       setSearchError('Gemini API key belum ditetapkan di pelayan. Sila hubungi pentadbir aplikasi.');
       return;
-    }
-    if (!navigator.geolocation) {
-      setSearchError('Peranti tidak menyokong geolokasi.');
-      return;
-    }
-
-    if (navigator.permissions?.query) {
-      try {
-        const status = await navigator.permissions.query({ name: 'geolocation' });
-        if (status.state === 'denied') {
-          setSearchError(
-            'Akses lokasi disekat untuk laman ini. Sila buka tetapan pelayar → Kebenaran Laman → Lokasi → Benarkan, kemudian cuba lagi.'
-          );
-          return;
-        }
-      } catch {
-        /* Permissions API not fully supported */
-      }
     }
 
     setSearching(true);
     setSearchError('');
     setNotFoundOpen(false);
 
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          findNearbyHalalRestaurants(pos.coords.latitude, pos.coords.longitude)
-            .then((results) => {
-              if (!results.length) {
-                setSearchError('Tiada promosi/diskaun makan halal ditemui berhampiran hari ini.');
-                setNotFoundOpen(true);
-              } else {
-                setRestaurants(results);
-                haptic(20);
-              }
-            })
-            .catch((err) => {
-              setSearchError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
-            })
-            .finally(() => setSearching(false));
-        },
-        (err) => {
-          setSearchError(
-            err?.code === 1
-              ? 'Kebenaran lokasi ditolak. Sila benarkan akses lokasi di tetapan pelayar.'
-              : 'Tidak dapat mengesan lokasi anda. Sila pastikan GPS dihidupkan.'
-          );
-          setSearching(false);
-        },
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-      );
-    } catch (err) {
-      setSearchError(`Ralat lokasi tidak dijangka. (${err?.message || 'unknown'})`);
-      setSearching(false);
+    // Fungsi pembantu untuk memanggil API Gemini restoran berdasarkan koordinat (GPS atau Fallback)
+    const executeFetch = async (lat, lng) => {
+      try {
+        const results = await findNearbyHalalRestaurants(lat, lng);
+        if (!results.length) {
+          setSearchError('Tiada promosi/diskaun makan halal ditemui berhampiran hari ini.');
+          setNotFoundOpen(true);
+        } else {
+          setRestaurants(results);
+          haptic(20);
+        }
+      } catch (err) {
+        setSearchError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
+      } finally {
+        setSearching(false);
+      }
+    };
+
+    if (!navigator.geolocation) {
+      // Fallback sekiranya peranti tidak menyokong geolokasi (Guna koordinat Kuala Lumpur: 3.1390, 101.6869)
+      await executeFetch(3.1390, 101.6869);
+      return;
     }
+
+    // Cuba dapatkan lokasi GPS dengan masa tamat (timeout) 6 saat supaya butang tidak "freeze"
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        executeFetch(pos.coords.latitude, pos.coords.longitude);
+      },
+      async (err) => {
+        console.warn('[JomMakan] GPS gagal dikesan atau ditolak. Menggunakan lokasi lalai (Kuala Lumpur).', err);
+        // Fallback automatik ke koordinat pusat jika kebenaran GPS disekat atau gagal
+        await executeFetch(3.1390, 101.6869);
+      },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+    );
   };
   
   return (
