@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, Sparkles, ScanLine, Trash2, ChevronRight, ChevronLeft,
   Timer as TimerIcon, PackageOpen, Percent, Star, ChevronDown, CookingPot,
   Soup, Salad, Beef, Fish, Drumstick, Play, Pause, RotateCcw,
-  Search, Loader2, AlertCircle, Upload
+  Search, Loader2, AlertCircle, Upload, Navigation, Phone, ExternalLink
 } from 'lucide-react';
 import { getApiKey, analyzePantryImage, generateRecipes, findNearbyHalalRestaurants } from './lib/gemini';
 import { compressImage } from './lib/image-compressor';
@@ -218,7 +218,6 @@ function ScannerDashboard({ onIngredientsExtracted }) {
     setError('');
     
     try {
-      // Compress image client-side to 800x800px before uploading (Saves up to 85% Vision Tokens!)
       const base64 = await compressImage(file, 800, 0.7);
       const items = await analyzePantryImage(base64, file.type || 'image/jpeg');
       
@@ -530,7 +529,7 @@ function RecipeCard({ recipe, pantry, cookedInfo, onOpen, onDelete }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* TUTORIAL MODE (STEP CAROUSEL + TIMER)                                */
+/* TUTORIAL MODE                                                        */
 /* ------------------------------------------------------------------ */
 
 function StepTimer({ duration }) {
@@ -693,13 +692,11 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
     });
 
     setPantry(merged);
-
     setGenerating(true);
     setGenError('');
     generateRecipes(merged)
       .then((newRecipes) => setRecipes(newRecipes))
       .catch((err) => {
-        console.error('[JomMakan] generateRecipes failed:', err);
         setGenError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
       })
       .finally(() => setGenerating(false));
@@ -715,7 +712,6 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
     generateRecipes(pantry)
       .then((newRecipes) => setRecipes(newRecipes))
       .catch((err) => {
-        console.error('[JomMakan] generateRecipes (refresh) failed:', err);
         setGenError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
       })
       .finally(() => setGenerating(false));
@@ -873,7 +869,7 @@ function MakanApa({ pantry, setPantry, cookedHistory, setCookedHistory, recipes,
 }
 
 /* ------------------------------------------------------------------ */
-/* MODULE 2: MAKAN MANA?                                                */
+/* REDESIGNED MODULE 2: MAKAN MANA?                                     */
 /* ------------------------------------------------------------------ */
 
 function RestaurantSkeleton() {
@@ -891,12 +887,18 @@ function RestaurantSkeleton() {
 
 function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
   const stars = Math.round(restaurant.rating || 0);
+  
+  const openMaps = () => {
+    const query = encodeURIComponent(`${restaurant.name} halal Malaysia`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+  };
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-[28px] bg-white shadow-md mb-4 overflow-hidden border border-charcoal/5"
+      className="rounded-[28px] bg-white shadow-md mb-4 overflow-hidden border border-charcoal/5 transition-all hover:shadow-lg"
     >
       <div className={`relative h-20 bg-gradient-to-br ${restaurant.gradient} flex items-center px-4`}>
         <UtensilsCrossed size={72} className="absolute -right-3 -bottom-4 text-white/10" strokeWidth={1.2} />
@@ -904,12 +906,12 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
           <UtensilsCrossed size={20} className="text-white" />
         </div>
         <div className="relative z-10 ml-3 flex-1 min-w-0">
-          <p className="font-display font-bold text-white truncate">{restaurant.name}</p>
+          <p className="font-display font-bold text-white truncate text-base">{restaurant.name}</p>
           <div className="flex items-center gap-0.5 mt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} size={10} className={i < stars ? 'text-kaya fill-kaya' : 'text-white/25'} />
             ))}
-            <span className="text-[10px] text-white/70 ml-1 font-semibold">{restaurant.rating}</span>
+            <span className="text-[10px] text-white/70 ml-1 font-semibold">{restaurant.rating} / 5.0</span>
           </div>
         </div>
         <TapButton
@@ -921,6 +923,7 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
       </div>
 
       <div className="p-4">
+        {/* Info badges */}
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
           {restaurant.cuisine && (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal/60 bg-charcoal/5 rounded-full px-2.5 py-1">
@@ -937,39 +940,45 @@ function RestaurantCard({ restaurant, onMarkEaten, onDelete, cooldownDays }) {
           )}
         </div>
 
-        <div className="flex items-start gap-2 bg-sambal/[0.08] rounded-2xl px-3 py-2.5">
+        {/* Promo banner */}
+        <div className="flex items-start gap-2 bg-sambal/[0.08] rounded-2xl px-3.5 py-2.5 mb-3">
           <Percent size={14} className="text-sambal shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-xs font-display font-bold text-sambal">{restaurant.discountLabel}</p>
-            {restaurant.promo && <p className="text-xs text-charcoal/70 mt-0.5">{restaurant.promo}</p>}
+            {restaurant.promo && <p className="text-xs text-charcoal/70 mt-0.5 leading-snug">{restaurant.promo}</p>}
           </div>
         </div>
 
-        {cooldownDays != null ? (
-          <div className="mt-3 flex items-center gap-2 text-xs text-charcoal/50">
-            <Clock size={12} /> Melawat {cooldownDays} hari lalu
-          </div>
-        ) : (
+        {/* Action Buttons Row */}
+        <div className="flex items-center gap-2">
           <TapButton
-            onClick={() => onMarkEaten(restaurant.id)}
-            className="w-full mt-3 py-2.5 rounded-xl bg-charcoal text-white font-display font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+            onClick={openMaps}
+            className="flex-1 py-2.5 rounded-xl bg-charcoal/5 text-charcoal font-display font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-charcoal/10"
           >
-            <Check size={14} /> Tandakan Makan Di Sini Hari Ini
+            <Navigation size={13} className="text-charcoal" /> Buka Peta
           </TapButton>
-        )}
+
+          {cooldownDays != null ? (
+            <div className="flex-[2] py-2.5 text-center text-[11px] text-charcoal/50 font-semibold bg-charcoal/5 rounded-xl">
+              Cooldown ({cooldownDays}h lagi)
+            </div>
+          ) : (
+            <TapButton
+              onClick={() => onMarkEaten(restaurant.id)}
+              className="flex-[2] py-2.5 rounded-xl bg-gradient-to-r from-sambal to-kaya text-white font-display font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <Check size={14} /> Dah Makan Sini
+            </TapButton>
+          )}
+        </div>
       </div>
     </motion.div>
   );
 }
 
-const SORT_OPTIONS = [
-  { key: 'nearest', label: 'Terdekat' },
-  { key: 'rating', label: 'Rating Tertinggi' },
-];
-
 function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurants, searching, searchError, onSearch }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [sortBy, setSortBy] = useState('nearest');
+  const [activeFilter, setActiveFilter] = useState('all'); // all, discount, nearby, topRated
 
   const markEaten = (id) => {
     setDiningHistory((prev) => [
@@ -992,38 +1001,46 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
   
   const parseDistance = (d) => parseFloat(String(d || '').replace(/[^\d.]/g, '')) || 999;
   
-  const sortList = (list) => {
-    const copy = [...list];
-    if (sortBy === 'rating') copy.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    else copy.sort((a, b) => parseDistance(a.distance) - parseDistance(b.distance));
-    return copy;
-  };
+  const filteredAndSortedRestaurants = useMemo(() => {
+    let list = restaurants.filter((r) => cooldownDaysFor(r.id) == null);
 
-  const active = sortList(restaurants.filter((r) => cooldownDaysFor(r.id) == null));
+    // Apply Filter Chips
+    if (activeFilter === 'discount') {
+      list = list.filter((r) => r.discountLabel && r.discountLabel.toLowerCase().includes('off') || r.discountLabel.toLowerCase().includes('%') || r.discountLabel.toLowerCase().includes('percuma'));
+    } else if (activeFilter === 'nearby') {
+      list = [...list].sort((a, b) => parseDistance(a.distance) - parseDistance(b.distance));
+    } else if (activeFilter === 'topRated') {
+      list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+
+    return list;
+  }, [restaurants, diningHistory, activeFilter]);
+
   const onCooldown = restaurants.filter((r) => cooldownDaysFor(r.id) != null);
   const hasResults = restaurants.length > 0;
   
   return (
     <div className="px-5 pt-4 pb-4">
+      {/* Header Banner & Trigger */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-sambal" />
-          <p className="font-display font-bold text-sm text-charcoal">Promo Berhampiran</p>
+        <div>
+          <p className="font-display font-bold text-base text-charcoal">Jejak Makan Halal</p>
+          <p className="text-xs text-charcoal/50">Cari promosi & diskuan berhampiran anda</p>
         </div>
         {hasResults && !searching && (
           <TapButton
             onClick={onSearch}
-            className="flex items-center gap-1 text-[11px] font-display font-bold text-charcoal/50 bg-charcoal/5 rounded-full px-3 py-1.5"
+            className="flex items-center gap-1 text-[11px] font-display font-bold text-charcoal bg-charcoal/5 hover:bg-charcoal/10 rounded-full px-3.5 py-2"
           >
-            <RotateCcw size={11} /> Cari Semula
+            <RotateCcw size={12} /> Cari Semula
           </TapButton>
         )}
       </div>
 
       {searching && (
         <div className="mb-4">
-          <div className="flex items-center gap-2 text-xs text-charcoal/50 font-semibold mb-3">
-            <Loader2 size={14} className="animate-spin text-sambal" /> Gemini sedang mencari promosi berhampiran...
+          <div className="flex items-center gap-2 text-xs text-charcoal/60 font-semibold mb-3">
+            <Loader2 size={14} className="animate-spin text-sambal" /> Gemini sedang meronda kawasan anda...
           </div>
           <RestaurantSkeleton />
           <RestaurantSkeleton />
@@ -1037,21 +1054,21 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
       )}
 
       {!searching && !hasResults && !searchError && (
-        <div className="rounded-[28px] bg-gradient-to-br from-charcoal to-pandan/70 p-6 text-center overflow-hidden relative">
+        <div className="rounded-[28px] bg-gradient-to-br from-charcoal via-charcoal to-pandan/70 p-6 text-center overflow-hidden relative shadow-lg">
           <MapPin size={120} className="absolute -right-6 -bottom-8 text-white/5" strokeWidth={1} />
           <div className="relative z-10">
             <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center mx-auto mb-4">
               <Percent size={26} className="text-kaya" />
             </div>
-            <p className="font-display font-bold text-lg text-white">Cari Promosi Hari Ini</p>
+            <p className="font-display font-bold text-lg text-white">Teroka Promosi Hari Ini</p>
             <p className="text-xs text-white/60 mt-1.5 leading-relaxed max-w-[240px] mx-auto">
-              Gemini akan imbas gerai & restoran halal berhampiran anda untuk diskaun & promosi yang aktif hari ini.
+              Ketik butang di bawah untuk mengesan kedai makan halal berhampiran yang menawarkan diskaun istimewa hari ini.
             </p>
             <TapButton
               onClick={onSearch}
               className="mt-5 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-sambal to-kaya text-white text-sm font-display font-bold shadow-lg shadow-sambal/30"
             >
-              <Search size={15} /> Cari Sekarang
+              <Search size={15} /> Imbas Kawasan
             </TapButton>
           </div>
         </div>
@@ -1059,44 +1076,46 @@ function MakanMana({ diningHistory, setDiningHistory, restaurants, setRestaurant
 
       {!searching && hasResults && (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] text-charcoal/45 font-semibold">
-              {active.length} promosi ditemui berhampiran
-            </p>
-            <div className="flex items-center gap-1.5">
-              {SORT_OPTIONS.map((opt) => (
-                <TapButton
-                  key={opt.key}
-                  onClick={() => setSortBy(opt.key)}
-                  className={`text-[11px] font-display font-bold rounded-full px-3 py-1.5 ${
-                    sortBy === opt.key ? 'bg-charcoal text-white' : 'bg-charcoal/5 text-charcoal/50'
-                  }`}
-                >
-                  {opt.label}
-                </TapButton>
-              ))}
-            </div>
+          {/* Interactive Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-2">
+            {[
+              { id: 'all', label: 'Semua Tawaran' },
+              { id: 'discount', label: 'Diskaun Hangat' },
+              { id: 'nearby', label: 'Paling Dekat' },
+              { id: 'topRated', label: 'Rating Tinggi ⭐' },
+            ].map((chip) => (
+              <TapButton
+                key={chip.id}
+                onClick={() => setActiveFilter(chip.id)}
+                className={`text-xs font-display font-bold rounded-full px-3.5 py-2 whitespace-nowrap transition-colors ${
+                  activeFilter === chip.id ? 'bg-charcoal text-white shadow-sm' : 'bg-white text-charcoal/70 border border-charcoal/10'
+                }`}
+              >
+                {chip.label}
+              </TapButton>
+            ))}
           </div>
 
-          {active.length === 0 && (
-            <p className="text-xs text-charcoal/50 mb-4">Semua pilihan dalam cooldown. Semak drawer di bawah.</p>
+          {filteredAndSortedRestaurants.length === 0 && (
+            <p className="text-xs text-charcoal/50 text-center py-6">Tiada tempat ditemui untuk penapis ini.</p>
           )}
 
-          {active.map((r) => (
+          {filteredAndSortedRestaurants.map((r) => (
             <RestaurantCard key={r.id} restaurant={r} onMarkEaten={markEaten} onDelete={removeRestaurant} cooldownDays={null} />
           ))}
         </>
       )}
 
+      {/* Cooldown Drawer */}
       {onCooldown.length > 0 && (
-        <div className="mt-2">
+        <div className="mt-4">
           <TapButton
             onClick={() => setDrawerOpen((o) => !o)}
             className="w-full flex items-center justify-between bg-white shadow-sm border border-charcoal/5 rounded-2xl px-4 py-3.5"
           >
             <span className="flex items-center gap-2 text-xs font-display font-bold text-charcoal">
               <Clock size={14} className="text-charcoal/40" />
-              Baru Dilawati (Cooldown) · {onCooldown.length}
+              Baru Dikunjungi (Dalam Cooldown) · {onCooldown.length}
             </span>
             <ChevronDown size={16} className={`text-charcoal transition-transform ${drawerOpen ? 'rotate-180' : ''}`} />
           </TapButton>
@@ -1201,7 +1220,7 @@ export default function App() {
           return;
         }
       } catch {
-        /* Permissions API not fully supported — fall through and let getCurrentPosition prompt normally */
+        /* Permissions API not fully supported */
       }
     }
 
@@ -1223,7 +1242,6 @@ export default function App() {
               }
             })
             .catch((err) => {
-              console.error('[JomMakan] findNearbyHalalRestaurants failed:', err);
               setSearchError(`${friendlyGeminiError(err)} (${err?.message || 'unknown'})`);
             })
             .finally(() => setSearching(false));
@@ -1239,7 +1257,6 @@ export default function App() {
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
       );
     } catch (err) {
-      console.error('[JomMakan] getCurrentPosition threw synchronously:', err);
       setSearchError(`Ralat lokasi tidak dijangka. (${err?.message || 'unknown'})`);
       setSearching(false);
     }
