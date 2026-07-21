@@ -1,4 +1,4 @@
-[cite: 3]import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Camera, ChefHat, MapPin, Plus, Minus, X, Check, Clock, Flame,
