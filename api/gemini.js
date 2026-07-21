@@ -4,7 +4,6 @@
 const MODEL = 'gemini-1.5-flash';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-// Enforce schemas to guarantee 100% valid JSON without wasting output tokens
 const SCHEMAS = {
   pantry: {
     type: "ARRAY",
@@ -54,10 +53,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Retrieve securely from Vercel Server Environment Variables (no VITE_ prefix!)
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'MISSING_API_KEY: Server environment variable not set.' });
+    return res.status(500).json({ error: 'Kunci API (GEMINI_API_KEY) tidak ditetapkan di Vercel Environment Variables.' });
   }
 
   const { action, payload } = req.body;
@@ -105,14 +103,13 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      return res.status(response.status).json({ error: `GEMINI_API_ERROR: ${errText}` });
+      return res.status(response.status).json({ error: `Google API Error (${response.status}): ${errText}` });
     }
 
     const data = await response.json();
     const candidate = data.candidates?.[0];
     const text = (candidate?.content?.parts || []).map((p) => p.text || '').join('');
-
-    // Parse JSON cleanly before returning to frontend
+    
     const match = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
     const parsedJson = match ? JSON.parse(match[0]) : [];
 
